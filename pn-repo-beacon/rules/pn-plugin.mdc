@@ -1,0 +1,7 @@
+---
+alwaysApply: false
+---
+
+This file is a placeholder. pn-plugin no longer writes live repo/branch data
+here — it writes into each workspace's own `.cursor/rules/pn-plugin.mdc`
+instead, to avoid multiple open workspaces overwriting each other's data.

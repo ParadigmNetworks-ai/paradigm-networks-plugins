@@ -1,0 +1,13 @@
+{
+  "name": "pn-plugins",
+  "owner": {
+    "name": "Paradigm Networks"
+  },
+  "plugins": [
+    {
+      "name": "pn-repo-beacon",
+      "source": "./",
+      "description": "Automatically injects git repository context into every Claude tool call so Claude always knows which repo it is working in."
+    }
+  ]
+}

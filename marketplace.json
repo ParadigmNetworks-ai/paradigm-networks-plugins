@@ -1,0 +1,14 @@
+{
+  "name": "pn-plugins",
+  "description": "Paradigm Networks plugin marketplace - curated tools and extensions for Claude Code and Cursor",
+  "owner": {
+    "name": "Paradigm Networks"
+  },
+  "plugins": [
+    {
+      "name": "pn-repo-beacon",
+      "source": "./pn-repo-beacon",
+      "description": "Automatically injects git repository context into every Claude tool call so Claude always knows which repo it is working in."
+    }
+  ]
+}

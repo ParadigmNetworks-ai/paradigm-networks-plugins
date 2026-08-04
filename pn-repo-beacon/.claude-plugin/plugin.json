@@ -1,0 +1,9 @@
+{
+  "name": "pn-repo-beacon",
+  "description": "Automatically injects git repository context into every Claude tool call so Claude always knows which repo it is working in.",
+  "version": "1.0.0",
+  "author": { "name": "Saad Ahmad" },
+  "homepage": "https://github.com/saadahmad-pn/pn-plugin-demo",
+  "repository": "https://github.com/saadahmad-pn/pn-plugin-demo",
+  "license": "MIT"
+}

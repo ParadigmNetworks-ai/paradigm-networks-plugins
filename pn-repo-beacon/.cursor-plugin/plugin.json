@@ -1,0 +1,7 @@
+{
+  "name": "pn-repo-beacon",
+  "description": "Keeps the agent aware of every git repository and branch in the workspace",
+  "version": "1.0.0",
+  "author": { "name": "Saad Ahmad" },
+  "hooks": "hooks-cursor/hooks.json"
+}
