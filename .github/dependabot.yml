@@ -1,0 +1,352 @@
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      time: "08:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 30
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+      include: "scope"
+    reviewers:
+      - "abbas-aamir"
+    assignees:
+      - "nauyan"
+    labels:
+      - "dependencies"
+      - "python"
+      - "security"
+      - "automated"
+    groups:
+      # Core Python framework dependencies
+      python-framework-patches:
+        patterns:
+          - "django"
+          - "django-*"
+          - "flask"
+          - "flask-*"
+          - "fastapi"
+          - "fastapi-*"
+          - "starlette"
+          - "uvicorn"
+          - "gunicorn"
+        update-types:
+          - "patch"
+      
+      python-framework-minors:
+        patterns:
+          - "django"
+          - "django-*"
+          - "flask"
+          - "flask-*"
+          - "fastapi"
+          - "fastapi-*"
+          - "starlette"
+          - "uvicorn"
+          - "gunicorn"
+        update-types:
+          - "minor"
+      
+      python-framework-majors:
+        patterns:
+          - "django"
+          - "django-*"
+          - "flask"
+          - "flask-*"
+          - "fastapi"
+          - "fastapi-*"
+          - "starlette"
+          - "uvicorn"
+          - "gunicorn"
+        update-types:
+          - "major"
+      
+      # Database and ORM
+      python-database-patches:
+        patterns:
+          - "psycopg2"
+          - "psycopg2-*"
+          - "psycopg3"
+          - "sqlalchemy"
+          - "sqlalchemy-*"
+          - "alembic"
+          - "pymongo"
+          - "redis"
+          - "celery"
+          - "celery-*"
+        update-types:
+          - "patch"
+      
+      python-database-minors:
+        patterns:
+          - "psycopg2"
+          - "psycopg2-*"
+          - "psycopg3"
+          - "sqlalchemy"
+          - "sqlalchemy-*"
+          - "alembic"
+          - "pymongo"
+          - "redis"
+          - "celery"
+          - "celery-*"
+        update-types:
+          - "minor"
+      
+      python-database-majors:
+        patterns:
+          - "psycopg2"
+          - "psycopg2-*"
+          - "psycopg3"
+          - "sqlalchemy"
+          - "sqlalchemy-*"
+          - "alembic"
+          - "pymongo"
+          - "redis"
+          - "celery"
+          - "celery-*"
+        update-types:
+          - "major"
+      
+      # AWS and Cloud SDKs
+      python-aws-patches:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "aioboto3"
+          - "aws-*"
+          - "azure-*"
+          - "google-cloud-*"
+        update-types:
+          - "patch"
+      
+      python-aws-minors:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "aioboto3"
+          - "aws-*"
+          - "azure-*"
+          - "google-cloud-*"
+        update-types:
+          - "minor"
+      
+      python-aws-majors:
+        patterns:
+          - "boto3"
+          - "botocore"
+          - "aioboto3"
+          - "aws-*"
+          - "azure-*"
+          - "google-cloud-*"
+        update-types:
+          - "major"
+      
+      # Testing and development tools
+      python-dev-patches:
+        patterns:
+          - "pytest"
+          - "pytest-*"
+          - "black"
+          - "flake8"
+          - "flake8-*"
+          - "mypy"
+          - "pylint"
+          - "coverage"
+          - "tox"
+        update-types:
+          - "patch"
+      
+      python-dev-minors:
+        patterns:
+          - "pytest"
+          - "pytest-*"
+          - "black"
+          - "flake8"
+          - "flake8-*"
+          - "mypy"
+          - "pylint"
+          - "coverage"
+          - "tox"
+        update-types:
+          - "minor"
+      
+      python-dev-majors:
+        patterns:
+          - "pytest"
+          - "pytest-*"
+          - "black"
+          - "flake8"
+          - "flake8-*"
+          - "mypy"
+          - "pylint"
+          - "coverage"
+          - "tox"
+        update-types:
+          - "major"
+      
+      # HTTP clients and APIs
+      python-http-patches:
+        patterns:
+          - "requests"
+          - "httpx"
+          - "aiohttp"
+          - "urllib3"
+          - "pydantic"
+          - "pydantic-*"
+        update-types:
+          - "patch"
+      
+      python-http-minors:
+        patterns:
+          - "requests"
+          - "httpx"
+          - "aiohttp"
+          - "urllib3"
+          - "pydantic"
+          - "pydantic-*"
+        update-types:
+          - "minor"
+      
+      python-http-majors:
+        patterns:
+          - "requests"
+          - "httpx"
+          - "aiohttp"
+          - "urllib3"
+          - "pydantic"
+          - "pydantic-*"
+        update-types:
+          - "major"
+      
+      # Data processing and ML
+      python-data-patches:
+        patterns:
+          - "numpy"
+          - "pandas"
+          - "scikit-learn"
+          - "scipy"
+          - "tensorflow"
+          - "torch"
+          - "pytorch"
+        update-types:
+          - "patch"
+      
+      python-data-minors:
+        patterns:
+          - "numpy"
+          - "pandas"
+          - "scikit-learn"
+          - "scipy"
+          - "tensorflow"
+          - "torch"
+          - "pytorch"
+        update-types:
+          - "minor"
+      
+      python-data-majors:
+        patterns:
+          - "numpy"
+          - "pandas"
+          - "scikit-learn"
+          - "scipy"
+          - "tensorflow"
+          - "torch"
+          - "pytorch"
+        update-types:
+          - "major"
+      
+      # Utilities and other dependencies
+      python-utils-patches:
+        patterns:
+          - "python-dotenv"
+          - "click"
+          - "typer"
+          - "rich"
+          - "pyyaml"
+          - "toml"
+          - "pytz"
+          - "python-dateutil"
+        update-types:
+          - "patch"
+      
+      python-utils-minors:
+        patterns:
+          - "python-dotenv"
+          - "click"
+          - "typer"
+          - "rich"
+          - "pyyaml"
+          - "toml"
+          - "pytz"
+          - "python-dateutil"
+        update-types:
+          - "minor"
+      
+      python-utils-majors:
+        patterns:
+          - "python-dotenv"
+          - "click"
+          - "typer"
+          - "rich"
+          - "pyyaml"
+          - "toml"
+          - "pytz"
+          - "python-dateutil"
+        update-types:
+          - "major"
+    
+    ignore:
+      - dependency-name: "setuptools"
+        versions:
+          - "< 69.0.0"
+      - dependency-name: "pip"
+        versions:
+          - "< 23.0"
+
+  # Dockerfile base image updates
+  - package-ecosystem: "docker"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      time: "08:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    reviewers:
+      - "abbas-aamir"
+    assignees:
+      - "nauyan"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "security"
+      - "automated"
+    groups:
+      docker-patches:
+        patterns:
+          - "*"
+        update-types:
+          - "patch"
+      
+      docker-minors:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+      
+      docker-majors:
+        patterns:
+          - "*"
+        update-types:
+          - "major"
