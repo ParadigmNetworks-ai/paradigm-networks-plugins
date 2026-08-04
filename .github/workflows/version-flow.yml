@@ -1,0 +1,222 @@
+name: Version Flow
+
+on:
+  pull_request:
+    types: [ opened, synchronize, reopened, ready_for_review ]
+    branches: [ develop, staging ]
+
+  pull_request_target:
+    types: [ opened, synchronize, reopened ]
+    branches: [ main ]
+
+  push:
+    branches: [ develop, staging, main ]
+
+  workflow_dispatch:
+    inputs:
+      runner-type:
+        type: choice
+        options: [ 'low', 'high' ]
+        default: 'low'
+      bump_type:
+        type: choice
+        options: [ auto, patch, minor, major ]
+        default: auto
+      force_version:
+        type: string
+        required: false
+      force_branch:
+        type: choice
+        options: [ "false", "true" ]
+        default: "false"
+      force_staging_finalize:
+        type: choice
+        options: [ "false", "true" ]
+        default: "false"
+      from_pr_merge:
+        type: string
+        required: false
+      source_branch:
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+  issues: write
+  checks: read
+  actions: write
+  id-token: write  # Required by version-management-flow.yml for OIDC
+
+concurrency:
+  group: version-flow-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true  # Cancel previous runs to prevent workflow spam
+
+jobs:
+  # ===========================================================================
+  # GUARD: Skip workflow for freshly created branches
+  # ===========================================================================
+  check_branch_validity:
+    name: Check Branch Validity
+    runs-on: ubuntu-latest
+    # Only run this check for push events (not PR events)
+    if: github.event_name == 'push'
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }}
+      pr_number: ${{ steps.extract_pr.outputs.pr_number }}
+      pr_body: ${{ steps.fetch_pr.outputs.pr_body }}
+      pr_title: ${{ steps.fetch_pr.outputs.pr_title }}
+      pr_head_ref: ${{ steps.fetch_pr.outputs.pr_head_ref }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to check if branch is fresh
+
+      - name: Extract PR number from commit message
+        id: extract_pr
+        shell: bash
+        run: |
+          COMMIT_MSG=$(cat <<'COMMIT_MSG_EOF'
+          ${{ github.event.head_commit.message }}
+          COMMIT_MSG_EOF
+          )
+          PR_NUMBER=""
+
+          if [[ "$COMMIT_MSG" =~ Merge\ pull\ request\ \#([0-9]+) ]]; then
+            PR_NUMBER="${BASH_REMATCH[1]}"
+            echo "::notice::Extracted PR number from merge commit: #$PR_NUMBER"
+
+          elif [[ "$COMMIT_MSG" =~ \(\#([0-9]+)\) ]]; then
+            PR_NUMBER="${BASH_REMATCH[1]}"
+            echo "::notice::Extracted PR number from squash merge commit: #$PR_NUMBER"
+          else
+            echo "::notice::No PR number found in commit message"
+          fi
+
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Fetch PR details if PR number found
+        id: fetch_pr
+        if: steps.extract_pr.outputs.pr_number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          PR_NUMBER="${{ steps.extract_pr.outputs.pr_number }}"
+
+          # Fetch PR details using GitHub CLI
+          echo "::notice::Fetching PR #$PR_NUMBER details for changelog extraction and cleanup..."
+          PR_DATA=$(gh pr view "$PR_NUMBER" --repo ${{ github.repository }} --json title,body,headRefName 2>&1)
+
+          if [[ $? -eq 0 ]]; then
+            PR_TITLE=$(echo "$PR_DATA" | jq -r '.title // ""')
+            PR_BODY=$(echo "$PR_DATA" | jq -r '.body // ""')
+            PR_HEAD_REF=$(echo "$PR_DATA" | jq -r '.headRefName // ""')
+
+            echo "::notice::Successfully fetched PR #$PR_NUMBER: $PR_TITLE (from branch: $PR_HEAD_REF)"
+
+            # Use heredoc to safely output PR body (may contain special characters)
+            {
+              echo "pr_title<<HEREDOC_EOF_PR_TITLE"
+              echo "$PR_TITLE"
+              echo "HEREDOC_EOF_PR_TITLE"
+              echo "pr_body<<HEREDOC_EOF_PR_BODY"
+              echo "$PR_BODY"
+              echo "HEREDOC_EOF_PR_BODY"
+              echo "pr_head_ref=$PR_HEAD_REF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Failed to fetch PR #$PR_NUMBER: $PR_DATA"
+            echo "pr_title=" >> "$GITHUB_OUTPUT"
+            echo "pr_body=" >> "$GITHUB_OUTPUT"
+            echo "pr_head_ref=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check if branch is fresh (should skip)
+        id: check
+        shell: bash
+        run: |
+          SHOULD_SKIP="false"
+          BRANCH_NAME="${{ github.ref_name }}"
+
+          # Never skip protected branches (develop, staging, main)
+          if [[ "$BRANCH_NAME" == "develop" ]] || [[ "$BRANCH_NAME" == "staging" ]] || [[ "$BRANCH_NAME" == "main" ]]; then
+            echo "::notice::Branch '$BRANCH_NAME' is a protected branch - never skipping version management"
+            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Check 1: Does VERSION file exist?
+          if [[ ! -f "VERSION" ]]; then
+            echo "::notice::VERSION file not found - this appears to be a fresh branch"
+            SHOULD_SKIP="true"
+          fi
+
+          # Check 2: Is this the first commit to the branch?
+          COMMIT_COUNT=$(git rev-list --count HEAD 2>/dev/null || echo "0")
+          if [[ "$COMMIT_COUNT" -le "1" ]]; then
+            echo "::notice::Branch has $COMMIT_COUNT commit(s) - this appears to be a fresh branch"
+            SHOULD_SKIP="true"
+          fi
+
+          # Check 3: Was this branch just created (< 5 minutes ago)?
+          BRANCH_AGE_SECONDS=$(git log -1 --format=%ct 2>/dev/null || echo "0")
+          CURRENT_TIME=$(date +%s)
+          AGE_DIFF=$((CURRENT_TIME - BRANCH_AGE_SECONDS))
+          if [[ "$AGE_DIFF" -lt 300 ]] && [[ "$COMMIT_COUNT" -le "5" ]]; then
+            echo "::notice::Branch created $AGE_DIFF seconds ago with $COMMIT_COUNT commits - likely a fresh branch"
+            SHOULD_SKIP="true"
+          fi
+
+          if [[ "$SHOULD_SKIP" == "true" ]]; then
+            echo "::warning::Skipping version management for freshly created branch: $BRANCH_NAME"
+            echo "::warning::To run version management, ensure VERSION file exists and branch has proper history"
+          fi
+
+          echo "should_skip=$SHOULD_SKIP" >> "$GITHUB_OUTPUT"
+
+  version_management:
+    name: Version Management
+    needs: [ check_branch_validity ]
+    if: |
+      always() &&
+      (github.event_name != 'push' || needs.check_branch_validity.outputs.should_skip != 'true') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft != true || github.event.action == 'ready_for_review')
+
+    uses: ParadigmNetworks-ai/gh-workflow/.github/workflows/version-management-flow.yml@feature/refactoring-vms
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      statuses: write
+      checks: read
+      actions: write
+      id-token: write
+    with:
+      runner-type: ${{ github.event_name == 'workflow_dispatch' && inputs.runner-type || 'low' }}
+      event_name: ${{ github.event_name == 'pull_request_target' && 'pull_request' || github.event_name }}
+      event_action: ${{ github.event.action || '' }}
+      ref_name: ${{ github.event.pull_request.base.ref || github.ref_name }}
+      base_ref: ${{ github.event.pull_request.base.ref || github.ref_name }}
+      head_ref: ${{ github.event.pull_request.head.ref || inputs.source_branch || '' }}
+      pr_number: ${{ github.event.pull_request.number || needs.check_branch_validity.outputs.pr_number || inputs.from_pr_merge || '' }}
+      pr_title: ${{ github.event.pull_request.title || needs.check_branch_validity.outputs.pr_title || '' }}
+      pr_body: ${{ github.event.pull_request.body || needs.check_branch_validity.outputs.pr_body || '' }}
+      pr_merged: ${{ ((github.event_name == 'pull_request' || github.event_name == 'pull_request_target') && github.event.pull_request.merged) || (github.event_name == 'push' && needs.check_branch_validity.outputs.pr_number != '') || false }}
+      pr_head_ref: ${{ github.event.pull_request.head.ref || needs.check_branch_validity.outputs.pr_head_ref || inputs.source_branch || '' }}
+      pr_base_ref: ${{ github.event.pull_request.base.ref || '' }}
+      pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      pr_merge_commit_sha: ${{ github.event.pull_request.merge_commit_sha || '' }}
+      pr_draft: ${{ github.event.pull_request.draft || false }}
+      is_staging_to_main_pr: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'staging' }}
+      bump_type: ${{ inputs.bump_type || 'auto' }}
+      custom_version: ${{ inputs.force_version || '' }}
+      force_branch: ${{ inputs.force_branch || 'false' }}
+      force_staging_finalize: ${{ inputs.force_staging_finalize || 'false' }}
+      actions_lib_ref: 'feature/refactoring-vms'
+      from_pr_merge: ${{ inputs.from_pr_merge || '' }}
+      source_branch: ${{ inputs.source_branch || '' }}
+      skip_branch_cleanup: false
+    secrets: inherit
