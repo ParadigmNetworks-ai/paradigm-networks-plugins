@@ -180,12 +180,18 @@ jobs:
   version_management:
     name: Version Management
     needs: [ check_branch_validity ]
+    # Skip draft PRs for both pull_request and pull_request_target events
+    # Note: github.event.pull_request.draft is a boolean, compare with == false for clarity
     if: |
       always() &&
       (github.event_name != 'push' || needs.check_branch_validity.outputs.should_skip != 'true') &&
-      (github.event_name != 'pull_request' || github.event.pull_request.draft != true || github.event.action == 'ready_for_review')
+      (
+        (github.event_name != 'pull_request' && github.event_name != 'pull_request_target') ||
+        github.event.pull_request.draft == false ||
+        github.event.action == 'ready_for_review'
+      )
 
-    uses: ParadigmNetworks-ai/gh-workflow/.github/workflows/version-management-flow.yml@feature/refactoring-vms
+    uses: ParadigmNetworks-ai/gh-workflow/.github/workflows/version-management-flow.yml@feature/hotfix-coldfix
     permissions:
       contents: write
       pull-requests: write
@@ -209,13 +215,13 @@ jobs:
       pr_base_ref: ${{ github.event.pull_request.base.ref || '' }}
       pr_head_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       pr_merge_commit_sha: ${{ github.event.pull_request.merge_commit_sha || '' }}
-      pr_draft: ${{ github.event.pull_request.draft || false }}
+      pr_draft: ${{ github.event.pull_request.draft == true }}
       is_staging_to_main_pr: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'staging' }}
       bump_type: ${{ inputs.bump_type || 'auto' }}
       custom_version: ${{ inputs.force_version || '' }}
       force_branch: ${{ inputs.force_branch || 'false' }}
       force_staging_finalize: ${{ inputs.force_staging_finalize || 'false' }}
-      actions_lib_ref: 'feature/refactoring-vms'
+      actions_lib_ref: 'feature/hotfix-coldfix'
       from_pr_merge: ${{ inputs.from_pr_merge || '' }}
       source_branch: ${{ inputs.source_branch || '' }}
       skip_branch_cleanup: false
