@@ -191,7 +191,7 @@ jobs:
         github.event.action == 'ready_for_review'
       )
 
-    uses: ParadigmNetworks-ai/gh-workflow/.github/workflows/version-management-flow.yml@feature/hotfix-coldfix
+    uses: ParadigmNetworks-ai/gh-workflow/.github/workflows/version-management-flow.yml@feature/refactoring-vms
     permissions:
       contents: write
       pull-requests: write
@@ -221,7 +221,7 @@ jobs:
       custom_version: ${{ inputs.force_version || '' }}
       force_branch: ${{ inputs.force_branch || 'false' }}
       force_staging_finalize: ${{ inputs.force_staging_finalize || 'false' }}
-      actions_lib_ref: 'feature/hotfix-coldfix'
+      actions_lib_ref: 'feature/refactoring-vms'
       from_pr_merge: ${{ inputs.from_pr_merge || '' }}
       source_branch: ${{ inputs.source_branch || '' }}
       skip_branch_cleanup: false
