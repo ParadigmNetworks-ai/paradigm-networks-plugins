@@ -193,3 +193,7 @@ cython_debug/
 /tooling/screenshots/crawl.json
 /tooling/screenshots/_audit
 /tooling/screenshots/_verify
+
+# Plugin script folders must always be committed. Without this, the template's
+# `lib/` rule above silently drops each plugin's scripts/lib/ directory.
+!/*/scripts/lib/
