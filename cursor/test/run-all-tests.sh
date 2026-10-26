@@ -1,0 +1,304 @@
+#!/bin/bash
+# Master test runner - runs all test suites and generates report
+
+set -o pipefail
+
+TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$TEST_DIR")"
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║  Phase 3: Comprehensive Test Suite                          ║${NC}"
+echo -e "${BLUE}║  Python → Bash Conversion Validation                        ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+TOTAL_TESTS=0
+TOTAL_PASSED=0
+TOTAL_FAILED=0
+FAILED_SUITES=()
+
+# Test Suite 1: Unit Tests
+echo -e "${BLUE}[1/10]${NC} Running Unit Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-unit.sh" > /tmp/unit-test.log 2>&1
+unit_status=$?
+unit_passed=$(grep "Passed:" /tmp/unit-test.log | awk '{print $2}')
+unit_total=$(grep "Total:" /tmp/unit-test.log | awk '{print $2}')
+unit_failed=$(grep "Failed:" /tmp/unit-test.log | awk '{print $2}')
+# Always accumulate real assertion counts from the log, whether the suite
+# passed or not -- test_summary prints Total/Passed/Failed either way, so
+# a failing suite's actual counts are available and shouldn't be replaced
+# with a flat "1 suite failed" that hides how many assertions ran.
+TOTAL_TESTS=$((TOTAL_TESTS + ${unit_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${unit_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${unit_failed:-0}))
+if [[ $unit_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Unit Tests: $unit_passed/$unit_total passed${NC}"
+else
+  echo -e "${RED}✗ Unit Tests failed ($unit_passed/$unit_total passed)${NC}"
+  FAILED_SUITES+=("Unit Tests")
+fi
+echo ""
+
+# Test Suite 2: Integration Tests
+echo -e "${BLUE}[2/10]${NC} Running Integration Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-hooks.sh" > /tmp/integration-test.log 2>&1
+int_status=$?
+int_passed=$(grep "Passed:" /tmp/integration-test.log | awk '{print $2}')
+int_total=$(grep "Total:" /tmp/integration-test.log | awk '{print $2}')
+int_failed=$(grep "Failed:" /tmp/integration-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${int_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${int_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${int_failed:-0}))
+if [[ $int_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Integration Tests: $int_passed/$int_total passed${NC}"
+else
+  echo -e "${RED}✗ Integration Tests failed ($int_passed/$int_total passed)${NC}"
+  FAILED_SUITES+=("Integration Tests")
+fi
+echo ""
+
+# Test Suite 2b: Git Utils Tests (lib/git-utils.sh resolvers,
+# lib/plugins-client.sh's pn_build_git_diff_files_json -- the changed-file
+# collection folded into check-tool-call.sh's before_tool_call gate)
+echo -e "${BLUE}[3/10]${NC} Running Git Utils Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-git-utils.sh" > /tmp/git-utils-test.log 2>&1
+gitevent_status=$?
+gitevent_passed=$(grep "Passed:" /tmp/git-utils-test.log | awk '{print $2}')
+gitevent_total=$(grep "Total:" /tmp/git-utils-test.log | awk '{print $2}')
+gitevent_failed=$(grep "Failed:" /tmp/git-utils-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${gitevent_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${gitevent_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${gitevent_failed:-0}))
+if [[ $gitevent_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Git Utils Tests: $gitevent_passed/$gitevent_total passed${NC}"
+else
+  echo -e "${RED}✗ Git Utils Tests failed ($gitevent_passed/$gitevent_total passed)${NC}"
+  FAILED_SUITES+=("Git Event Detection Tests")
+fi
+echo ""
+
+# Test Suite 3b: Code Chain Recording Tests (lib/plugins-client.sh's
+# session-lifecycle + after_* recording functions, get_current_turn_messages)
+echo -e "${BLUE}[4/10]${NC} Running Code Chain Recording Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-codechain-client.sh" > /tmp/codechain-client-test.log 2>&1
+codechain_status=$?
+codechain_passed=$(grep "Passed:" /tmp/codechain-client-test.log | awk '{print $2}')
+codechain_total=$(grep "Total:" /tmp/codechain-client-test.log | awk '{print $2}')
+codechain_failed=$(grep "Failed:" /tmp/codechain-client-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${codechain_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${codechain_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${codechain_failed:-0}))
+if [[ $codechain_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Code Chain Recording Tests: $codechain_passed/$codechain_total passed${NC}"
+else
+  echo -e "${RED}✗ Code Chain Recording Tests failed ($codechain_passed/$codechain_total passed)${NC}"
+  FAILED_SUITES+=("Code Chain Recording Tests")
+fi
+echo ""
+
+# Test Suite 4c: Session Metadata Tests (lib/session-metadata.sh -- the
+# local, purely-client-side session-lifecycle mechanism that replaced the
+# session-start/session-end plugins API calls)
+echo -e "${BLUE}[5/10]${NC} Running Session Metadata Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-session-metadata.sh" > /tmp/session-metadata-test.log 2>&1
+sessmeta_status=$?
+sessmeta_passed=$(grep "Passed:" /tmp/session-metadata-test.log | awk '{print $2}')
+sessmeta_total=$(grep "Total:" /tmp/session-metadata-test.log | awk '{print $2}')
+sessmeta_failed=$(grep "Failed:" /tmp/session-metadata-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${sessmeta_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${sessmeta_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${sessmeta_failed:-0}))
+if [[ $sessmeta_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Session Metadata Tests: $sessmeta_passed/$sessmeta_total passed${NC}"
+else
+  echo -e "${RED}✗ Session Metadata Tests failed ($sessmeta_passed/$sessmeta_total passed)${NC}"
+  FAILED_SUITES+=("Session Metadata Tests")
+fi
+echo ""
+
+# Test Suite 4b: Scan Client Tests (lib/plugins-client.sh's before_prompt/
+# before_tool_call gating, used by check-prompt.sh/check-tool-call.sh)
+echo -e "${BLUE}[6/10]${NC} Running Scan Client Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-scan-client.sh" > /tmp/scan-client-test.log 2>&1
+scan_status=$?
+scan_passed=$(grep "Passed:" /tmp/scan-client-test.log | awk '{print $2}')
+scan_total=$(grep "Total:" /tmp/scan-client-test.log | awk '{print $2}')
+scan_failed=$(grep "Failed:" /tmp/scan-client-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${scan_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${scan_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${scan_failed:-0}))
+if [[ $scan_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Scan Client Tests: $scan_passed/$scan_total passed${NC}"
+else
+  echo -e "${RED}✗ Scan Client Tests failed ($scan_passed/$scan_total passed)${NC}"
+  FAILED_SUITES+=("Scan Client Tests")
+fi
+echo ""
+
+# Test Suite 4d: Login Detection Tests (lib/login-detection.sh's
+# pn_is_login_initiation_command -- PN-12153's scan exemption for the login
+# skill's own `bash <path>/login.sh --base-url <url>` tool call)
+echo -e "${BLUE}[7/10]${NC} Running Login Detection Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-login-detection.sh" > /tmp/login-detection-test.log 2>&1
+logindetect_status=$?
+logindetect_passed=$(grep "Passed:" /tmp/login-detection-test.log | awk '{print $2}')
+logindetect_total=$(grep "Total:" /tmp/login-detection-test.log | awk '{print $2}')
+logindetect_failed=$(grep "Failed:" /tmp/login-detection-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${logindetect_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${logindetect_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${logindetect_failed:-0}))
+if [[ $logindetect_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Login Detection Tests: $logindetect_passed/$logindetect_total passed${NC}"
+else
+  echo -e "${RED}✗ Login Detection Tests failed ($logindetect_passed/$logindetect_total passed)${NC}"
+  FAILED_SUITES+=("Login Detection Tests")
+fi
+echo ""
+
+# Test Suite 5: Error Scenario Tests
+echo -e "${BLUE}[8/10]${NC} Running Error Scenario Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+"$TEST_DIR/test-errors.sh" > /tmp/error-test.log 2>&1
+err_status=$?
+err_passed=$(grep "Passed:" /tmp/error-test.log | awk '{print $2}')
+err_total=$(grep "Total:" /tmp/error-test.log | awk '{print $2}')
+err_failed=$(grep "Failed:" /tmp/error-test.log | awk '{print $2}')
+TOTAL_TESTS=$((TOTAL_TESTS + ${err_total:-0}))
+TOTAL_PASSED=$((TOTAL_PASSED + ${err_passed:-0}))
+TOTAL_FAILED=$((TOTAL_FAILED + ${err_failed:-0}))
+if [[ $err_status -eq 0 ]]; then
+  echo -e "${GREEN}✓ Error Scenario Tests: $err_passed/$err_total passed${NC}"
+else
+  echo -e "${RED}✗ Error Scenario Tests failed ($err_passed/$err_total passed)${NC}"
+  FAILED_SUITES+=("Error Scenario Tests")
+fi
+echo ""
+
+# Windows (PowerShell) suite: the scripts/*.ps1 hooks and libraries, via
+# Pester. Needs pwsh with Pester 5+; reported as skipped (not passed) when
+# either is missing, so a machine without them can't look fully green.
+echo -e "${BLUE}[9/10]${NC} Running Windows (Pester) Tests..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+pester_total=0
+if command -v pwsh &>/dev/null && pwsh -NoProfile -Command 'if (Get-Module -ListAvailable Pester | Where-Object { $_.Version.Major -ge 5 }) { exit 0 } else { exit 1 }' &>/dev/null; then
+  (cd "$PROJECT_DIR" && pwsh -NoProfile -Command '$r = Invoke-Pester -Path test/pester -Output Detailed -PassThru; "Total: $($r.TotalCount)"; "Passed: $($r.PassedCount)"; "Failed: $($r.FailedCount)"; exit $r.FailedCount') > /tmp/pester-test.log 2>&1
+  pester_status=$?
+  pester_passed=$(grep "^Passed:" /tmp/pester-test.log | awk '{print $2}')
+  pester_total=$(grep "^Total:" /tmp/pester-test.log | awk '{print $2}')
+  pester_failed=$(grep "^Failed:" /tmp/pester-test.log | awk '{print $2}')
+  TOTAL_TESTS=$((TOTAL_TESTS + ${pester_total:-0}))
+  TOTAL_PASSED=$((TOTAL_PASSED + ${pester_passed:-0}))
+  TOTAL_FAILED=$((TOTAL_FAILED + ${pester_failed:-0}))
+  if [[ $pester_status -eq 0 ]]; then
+    echo -e "${GREEN}✓ Windows (Pester) Tests: $pester_passed/$pester_total passed${NC}"
+  else
+    [[ -z "$pester_failed" || "$pester_failed" -eq 0 ]] && TOTAL_FAILED=$((TOTAL_FAILED + 1))
+    echo -e "${RED}✗ Windows (Pester) Tests failed ($pester_passed/$pester_total passed) -- see /tmp/pester-test.log${NC}"
+    FAILED_SUITES+=("Windows (Pester) Tests")
+  fi
+else
+  echo -e "${YELLOW}⚠ Windows (Pester) Tests SKIPPED: needs pwsh with Pester 5+ (Install-Module Pester)${NC}"
+fi
+echo ""
+
+# Suite 6: Dependency Check
+echo -e "${BLUE}[10/10]${NC} Checking Dependencies..."
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+DEPS_OK=true
+DEPS_FOUND=()
+DEPS_MISSING=()
+
+for cmd in bash curl jq openssl nc; do
+  if command -v "$cmd" &>/dev/null; then
+    DEPS_FOUND+=("$cmd")
+    echo -e "  ${GREEN}✓${NC} $cmd"
+  else
+    DEPS_MISSING+=("$cmd")
+    echo -e "  ${RED}✗${NC} $cmd (missing)"
+    DEPS_OK=false
+  fi
+done
+
+if $DEPS_OK; then
+  echo -e "${GREEN}✓ All dependencies available${NC}"
+else
+  echo -e "${YELLOW}⚠ Some optional dependencies missing (see above)${NC}"
+fi
+echo ""
+
+# Generate comprehensive report
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║  Phase 3 Summary                                           ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+if [[ $TOTAL_FAILED -eq 0 ]]; then
+  echo -e "${GREEN}✓ All test suites passed!${NC}"
+  echo ""
+  echo "Test Results:"
+  echo "  Total Tests:  ${TOTAL_TESTS}"
+  echo -e "  Passed:       ${GREEN}${TOTAL_PASSED}${NC}"
+  echo -e "  Failed:       ${GREEN}0${NC}"
+  echo ""
+  echo "Test Coverage:"
+  echo "  • Unit Tests:              ${unit_total} assertions (lib/common.sh, lib/git-utils.sh, pn_config.sh)"
+  echo "  • Integration Tests:       ${int_total} tests (check-session.sh, check-prompt.sh, check-tool-call.sh)"
+  echo "  • Git Utils:               ${gitevent_total} tests (git-utils resolvers, lib/plugins-client.sh pn_build_git_diff_files_json)"
+  echo "  • Code Chain Recording:    ${codechain_total} tests (lib/plugins-client.sh, get_current_turn_messages)"
+  echo "  • Session Metadata:        ${sessmeta_total} tests (lib/session-metadata.sh, check-session.sh/check-session-end.sh)"
+  echo "  • Scan Client:             ${scan_total} tests (lib/plugins-client.sh gating, POST /api/v1/plugins/sessions/{id}/*)"
+  echo "  • Login Detection:         ${logindetect_total} tests (lib/login-detection.sh, PN-12153 login-initiation scan exemption)"
+  echo "  • Error Scenarios:         ${err_total} tests (edge cases, malformed input, file system errors)"
+  echo "  • Windows (Pester):        ${pester_total} tests (scripts/*.ps1 hooks, lib/*.ps1, pn_config.ps1)"
+  echo ""
+  echo "Dependencies:"
+  echo "  Found:   ${#DEPS_FOUND[@]} (${DEPS_FOUND[*]})"
+  if [[ ${#DEPS_MISSING[@]} -gt 0 ]]; then
+    echo "  Missing: ${#DEPS_MISSING[@]} (${DEPS_MISSING[*]})"
+  else
+    echo "  Missing: 0"
+  fi
+  echo ""
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo -e "${GREEN}Phase 3 COMPLETE: All validations passed ✓${NC}"
+  echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  exit 0
+else
+  echo -e "${RED}✗ Some test suites failed!${NC}"
+  echo ""
+  echo "Failed Suites:"
+  for suite in "${FAILED_SUITES[@]}"; do
+    echo "  • $suite"
+  done
+  echo ""
+  echo "Test Results:"
+  echo "  Total Tests:  ${TOTAL_TESTS}"
+  echo -e "  Passed:       ${GREEN}${TOTAL_PASSED}${NC}"
+  echo -e "  Failed:       ${RED}${TOTAL_FAILED}${NC}"
+  echo ""
+  echo "Check test logs:"
+  echo "  /tmp/unit-test.log"
+  echo "  /tmp/integration-test.log"
+  echo "  /tmp/git-utils-test.log"
+  echo "  /tmp/codechain-client-test.log"
+  echo "  /tmp/session-metadata-test.log"
+  echo "  /tmp/scan-client-test.log"
+  echo "  /tmp/login-detection-test.log"
+  echo "  /tmp/error-test.log"
+  echo ""
+  exit 1
+fi

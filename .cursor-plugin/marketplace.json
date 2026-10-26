@@ -1,0 +1,17 @@
+{
+  "name": "paradigm-networks-plugins",
+  "owner": {
+    "name": "Paradigm Networks"
+  },
+  "metadata": {
+    "description": "Paradigm Networks plugins for AI coding tools"
+  },
+  "plugins": [
+    {
+      "name": "paradigm-networks",
+      "source": "./cursor",
+      "description": "Checks prompts, tool calls and git pushes in Cursor against your organization's Paradigm Networks security policy, and blocks risky actions like destructive commands or unsafe code. Requires a Paradigm Networks account.",
+      "category": "security"
+    }
+  ]
+}
