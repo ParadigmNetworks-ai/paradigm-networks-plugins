@@ -10,4 +10,15 @@ The format is based on Keep a Changelog, and this project adheres to Semantic Ve
 
 ### Changed
 - [PN-12435] - `.gitignore` re-includes each plugin's `scripts/lib/` folder (the template's `lib/` rule would otherwise drop it)
+- [PN-12435] - `.gitignore` trimmed to OS, editor, env and log files
+
+### Fixed
+- [PN-12435] - Windows login check no longer reports NOT_CONFIGURED for logged-in users
+
+### Removed
+- [PN-12435] - Dependabot config for pip/Docker (the repo has neither)
+
+### Security
+- [PN-12435] - Git remote URLs and branch names are checked against an allowlist before they go into the agent's repo context
+- [PN-12435] - Logout revokes the login on the server before deleting local credentials
 
