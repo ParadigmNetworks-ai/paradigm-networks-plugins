@@ -1,0 +1,30 @@
+name: verify-builds
+
+# This repository is published by release/release.sh in Paradigm Networks'
+# source repository; BUILD records which commit each release came from.
+# This checks that the pn-plugin binaries are exactly the ones listed in
+# SHA256SUMS, with none missing and none extra.
+
+on:
+  pull_request:
+  push:
+    branches: [develop]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Binaries match SHA256SUMS
+        run: |
+          sha256sum --check --strict SHA256SUMS
+          listed="$(awk '{print $2}' SHA256SUMS | sed 's/^\*//' | sort)"
+          present="$(ls claude/bin/pn-plugin-* cursor/bin/pn-plugin-* | sort)"
+          if [ "$listed" != "$present" ]; then
+            echo "::error::The binaries in claude/bin and cursor/bin don't match the list in SHA256SUMS."
+            diff <(echo "$listed") <(echo "$present") || true
+            exit 1
+          fi

@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "command": "scripts/run-hook.cmd check-session",
+        "matcher": "",
+        "failClosed": false,
+        "timeout": 10
+      }
+    ],
+    "sessionEnd": [
+      {
+        "command": "scripts/run-hook.cmd check-session-end",
+        "matcher": "",
+        "failClosed": false,
+        "timeout": 10
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "scripts/run-hook.cmd check-turn-complete",
+        "matcher": "",
+        "failClosed": false,
+        "timeout": 15
+      }
+    ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "scripts/run-hook.cmd check-prompt",
+        "timeout": 250,
+        "failClosed": true
+      }
+    ],
+    "preToolUse": [
+      {
+        "matcher": "",
+        "command": "scripts/run-hook.cmd check-tool-call",
+        "timeout": 250,
+        "failClosed": true
+      }
+    ],
+    "postToolUse": [
+      {
+        "matcher": "",
+        "command": "scripts/run-hook.cmd check-tool-call-record",
+        "failClosed": false,
+        "timeout": 250
+      }
+    ]
+  }
+}

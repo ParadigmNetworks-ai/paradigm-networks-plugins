@@ -1,0 +1,15 @@
+# Written by the plugin into each workspace it runs in, including this one
+# while developing it
+.cursor/rules/paradigm-repo-context.mdc
+
+# Test scratch dir for the repo-context tests (self-cleaned; kept as a safety net)
+test/tmp-repo-context-workspace/
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+*.egg-info/
+.pytest_cache/
+.venv/
+server/

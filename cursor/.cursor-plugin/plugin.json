@@ -1,0 +1,33 @@
+{
+  "name": "paradigm-networks",
+  "displayName": "Paradigm Networks",
+  "description": "Checks prompts, tool calls and git pushes in Cursor against your organization's Paradigm Networks security policy, and blocks risky actions like destructive commands or unsafe code. Requires a Paradigm Networks account.",
+  "version": "0.1.0",
+  "minClientVersions": {
+    "cursor": "2.5.0"
+  },
+  "author": {
+    "name": "Paradigm Networks",
+    "email": "plugins@paradigmnetworks.ai"
+  },
+  "publisher": "Paradigm Networks",
+  "homepage": "https://github.com/ParadigmNetworks-ai/paradigm-networks-plugins",
+  "repository": "https://github.com/ParadigmNetworks-ai/paradigm-networks-plugins",
+  "license": "MIT",
+  "logo": "assets/logo.png",
+  "category": "security",
+  "keywords": [
+    "security",
+    "guardrails",
+    "policy",
+    "compliance",
+    "hooks",
+    "ai-governance"
+  ],
+  "tags": [
+    "code-security",
+    "governance",
+    "scanner"
+  ],
+  "hooks": "hooks/hooks.json"
+}

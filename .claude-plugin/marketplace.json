@@ -1,0 +1,18 @@
+{
+  "name": "paradigm-networks-plugins",
+  "owner": {
+    "name": "Paradigm Networks",
+    "email": "plugins@paradigmnetworks.ai"
+  },
+  "metadata": {
+    "description": "Paradigm Networks plugins for AI coding tools"
+  },
+  "plugins": [
+    {
+      "name": "paradigm-networks",
+      "source": "./claude",
+      "description": "Checks prompts, tool calls and git pushes in Claude Code against your organization's Paradigm Networks security policy, and blocks risky actions like destructive commands or unsafe code. Requires a Paradigm Networks account.",
+      "category": "security"
+    }
+  ]
+}

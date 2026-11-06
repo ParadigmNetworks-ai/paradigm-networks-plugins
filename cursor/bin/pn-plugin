@@ -1,0 +1,43 @@
+#!/bin/sh
+# Runs the pn-plugin build for this machine (bin/pn-plugin-<os>-<arch>),
+# telling it where the plugin is installed. On macOS and Linux every hook
+# (scripts/run-hook.cmd) and script goes through here; on Windows,
+# run-hook.cmd and the .ps1 scripts run the .exe themselves.
+#
+# The plugin root is worked out with cd + pwd, the logical path the agent
+# sees, so the scripts directory pn-plugin reports matches the one the agent
+# is told to run login.sh from.
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+case "$(uname -s 2>/dev/null)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  *) os=unknown ;;
+esac
+case "$(uname -m 2>/dev/null)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *) arch=unknown ;;
+esac
+
+exe="$root/bin/pn-plugin-$os-$arch"
+
+if [ ! -x "$exe" ]; then
+  # No build for this machine (an unexpected OS or CPU). A hook steps
+  # aside; a command fails with the reason.
+  reason="Paradigm Networks has no build for this machine ($(uname -s 2>/dev/null)/$(uname -m 2>/dev/null))"
+  if [ "$1" = hook ]; then
+    cat >/dev/null 2>&1
+    case "$2" in
+      check-prompt) echo '{"continue": true}' ;;
+      check-tool-call) echo '{"permission": "allow"}' ;;
+      *) echo '{}' ;;
+    esac
+    exit 0
+  fi
+  echo "error: $reason." >&2
+  exit 1
+fi
+
+PN_PLUGIN_ROOT="$root" exec "$exe" "$@" --host cursor

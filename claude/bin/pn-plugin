@@ -1,0 +1,49 @@
+#!/bin/sh
+# Runs the pn-plugin build for this machine (bin/pn-plugin-<os>-<arch>),
+# telling it where the plugin is installed. Every hook and script goes
+# through here.
+#
+# The plugin root is worked out with cd + pwd, the logical path the agent
+# sees, so the scripts directory pn-plugin reports matches the one the agent
+# is told to run login.sh from. On Windows, Claude Code runs this in Git
+# Bash, whose pwd gives /c/Users/...; pwd -W gives C:/Users/..., which the
+# Windows program can open and Git Bash still accepts.
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+
+case "$(uname -s 2>/dev/null)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  MINGW*|MSYS*|CYGWIN*) os=windows ;;
+  *) os=unknown ;;
+esac
+case "$(uname -m 2>/dev/null)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *) arch=unknown ;;
+esac
+
+exe="$root/bin/pn-plugin-$os-$arch"
+if [ "$os" = windows ]; then
+  exe="$exe.exe"
+  root="$(cd "$root" && pwd -W 2>/dev/null || pwd)"
+fi
+
+if [ ! -x "$exe" ]; then
+  # No build for this machine (an unexpected OS or CPU). A hook steps
+  # aside, saying so once per session; a command fails with the reason.
+  reason="Paradigm Networks has no build for this machine ($(uname -s 2>/dev/null)/$(uname -m 2>/dev/null))"
+  if [ "$1" = hook ]; then
+    cat >/dev/null 2>&1
+    if [ "$2" = check-session ]; then
+      printf '{"systemMessage": "%s, so prompts and tool calls in this session are NOT checked against your organization'"'"'s policy."}\n' "$reason"
+    else
+      echo '{}'
+    fi
+    exit 0
+  fi
+  echo "error: $reason." >&2
+  exit 1
+fi
+
+PN_PLUGIN_ROOT="$root" exec "$exe" "$@" --host claude
