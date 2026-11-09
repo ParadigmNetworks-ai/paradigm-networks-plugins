@@ -3,7 +3,8 @@ name: verify-builds
 # This repository is published by release/release.sh in Paradigm Networks'
 # source repository; BUILD records which commit each release came from.
 # This checks that the pn-plugin binaries are exactly the ones listed in
-# SHA256SUMS, with none missing and none extra.
+# SHA256SUMS, with none missing and none extra, and tags each release
+# (v<version> from BUILD) once it reaches develop.
 
 on:
   pull_request:
@@ -27,4 +28,26 @@ jobs:
             echo "::error::The binaries in claude/bin and cursor/bin don't match the list in SHA256SUMS."
             diff <(echo "$listed") <(echo "$present") || true
             exit 1
+          fi
+
+  tag:
+    # Tags v<version> from BUILD on the commit that brought the release to
+    # develop. Only this job can write, and only on a push to develop.
+    needs: verify
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tag the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v$(sed -n 's/^version: *//p' BUILD)"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists"
+          else
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
+            echo "Tagged $GITHUB_SHA as $tag"
           fi
