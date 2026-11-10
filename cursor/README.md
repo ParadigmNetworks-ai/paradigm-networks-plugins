@@ -201,5 +201,5 @@ must be set in the environment Cursor is started from.
 
 ## More
 
-- [Changelog](CHANGELOG.md)
+- [Changelog](https://github.com/ParadigmNetworks-ai/paradigm-networks-plugins/blob/develop/CHANGELOG.md)
 - [License](LICENSE) (MIT)

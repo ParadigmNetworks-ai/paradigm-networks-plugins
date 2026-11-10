@@ -10,6 +10,16 @@ VERSION text eol=lf
 # Shell scripts must use LF
 *.sh text eol=lf
 
+# Go source: gofmt (checked in CI on every OS) only accepts LF
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# The launchers are sh scripts without a .sh extension: a CRLF checkout on
+# Windows would break their #! line under Git Bash
+claude/bin/pn-plugin text eol=lf
+cursor/bin/pn-plugin text eol=lf
+
 # pn-plugin builds
 claude/bin/pn-plugin-* binary
 cursor/bin/pn-plugin-* binary
