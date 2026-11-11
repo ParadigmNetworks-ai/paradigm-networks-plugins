@@ -47,7 +47,7 @@ Proceed?"). Only continue on a clear yes.
 With the Bash tool:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/logout.sh
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/logout.sh"
 ```
 
 Use that path exactly as written — it is this installation's own scripts

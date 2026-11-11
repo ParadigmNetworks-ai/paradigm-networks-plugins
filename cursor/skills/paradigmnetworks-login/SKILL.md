@@ -50,7 +50,7 @@ When Paradigm Networks is not configured, the hook's notice also contains
 the exact login command with that path already filled in:
 
 ```
-bash <scripts-dir>/login.sh --base-url <their-base-url>
+bash "<scripts-dir>/login.sh" --base-url <their-base-url>
 ```
 
 If you have that notice, skip straight to step 3 (get the base URL) and then
@@ -107,7 +107,7 @@ finding to point at:
 macOS/Linux:
 
 ```bash
-bash <path-to-check-configured.sh>
+bash "<path-to-check-configured.sh>"
 ```
 
 Windows:
@@ -169,7 +169,7 @@ Uses the `login.sh`/`login.ps1` path already located in step 1.
 macOS/Linux:
 
 ```bash
-bash <path-to-login.sh> --base-url <the-base-url>
+bash "<path-to-login.sh>" --base-url <the-base-url>
 ```
 
 Windows:

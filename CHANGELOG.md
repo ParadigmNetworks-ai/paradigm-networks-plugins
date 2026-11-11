@@ -4,6 +4,13 @@ What's new in the Paradigm Networks plugins, newest first.
 
 ## Unreleased
 
+## v0.1.1, 2026-11-11
+
+- Logging in and out works when your home folder's name has a space in it (for example
+  `C:\Users\Jane Doe`). Before, Claude Code couldn't run the login and reported it as failed.
+- If a login succeeds in the browser but can't be saved on your computer, it's now cancelled on
+  the server, so it no longer shows under your organization's Plugin logins.
+
 ## v0.1.0, 2026-11-09
 
 - First release of the Paradigm Networks plugin for Cursor and Claude Code. It checks your

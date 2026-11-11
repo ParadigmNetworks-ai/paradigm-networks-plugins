@@ -53,7 +53,7 @@ Skip this if you already know login is missing (the SessionStart notice or a
 deny message said so). Otherwise run, with the Bash tool:
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/check-configured.sh
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/check-configured.sh"
 ```
 
 Run it **exactly as shown and nothing else** — don't combine it with `cd`,
@@ -100,7 +100,7 @@ With the Bash tool, **with `run_in_background: true`** (it waits up to five
 minutes for the browser sign-in):
 
 ```bash
-bash ${CLAUDE_PLUGIN_ROOT}/scripts/login.sh --base-url <the-base-url>
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/login.sh" --base-url <the-base-url>
 ```
 
 Run this command **exactly as shown and nothing else** — don't combine it with

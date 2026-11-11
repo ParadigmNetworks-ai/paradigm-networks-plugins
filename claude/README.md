@@ -87,7 +87,7 @@ and Claude tells you it couldn't be revoked on the server.
 Until you log in, prompts go through but Claude's tool calls (file edits,
 shell commands, MCP tools) are blocked, apart from the login itself.
 
-A login lasts up to 30 days (your organization can change this), after which
+A login lasts up to 7 days (your organization can change this), after which
 you sign in again in the browser. Your organization's admins can also end
 your login, for example if a laptop is lost. In both cases your next prompt
 is blocked with a message, and your browser opens so you can sign in again.
