@@ -32,10 +32,10 @@ reporter updated as a fix is developed.
 - The plugin's login token can only be used to send checks to Paradigm
   Networks. It can't be used for any other Paradigm Networks API.
 - Your login is kept in your OS credential store (macOS Keychain, Linux
-  Secret Service, or DPAPI on Windows), not in plain text. See
+  Secret Service, or DPAPI on Windows). See
   [Data handling](README.md#data-handling) for the details and the
   fallback.
-- A login lasts up to 30 days, after which you sign in again. Logging out
+- A login lasts up to 7 days, after which you sign in again. Logging out
   ends the login on the server too, and your organization's admins can end
   any user's logins at any time.
 - If a stolen copy of a login is used after the real one has been

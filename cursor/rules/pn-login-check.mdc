@@ -45,7 +45,7 @@ finding to point at.
 Then run, macOS/Linux:
 
 ```bash
-bash <scripts-dir>/check-configured.sh
+bash "<scripts-dir>/check-configured.sh"
 ```
 
 Windows (PowerShell):

@@ -94,7 +94,7 @@ one.
 macOS/Linux:
 
 ```bash
-bash <path-to-logout.sh>
+bash "<path-to-logout.sh>"
 ```
 
 Windows:
