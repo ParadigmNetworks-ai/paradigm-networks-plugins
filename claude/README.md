@@ -202,7 +202,9 @@ must be set in the environment Claude Code is started from.
   means someone who can block this machine's network access to Paradigm
   Networks can disable prompt checks, while tool calls stay blocked.
 - **If a check itself fails** (it crashes or exceeds its time limit), Claude
-  Code blocks the prompt or tool call.
+  Code blocks the prompt or tool call. This needs Claude Code 2.1.295 or
+  later: older versions let the prompt or tool call through, so keep Claude
+  Code up to date (`claude --version` shows yours).
 - **Tool results are recorded in the background**, so the result of the very
   last tool call can be missed if Claude Code exits straight after it.
 

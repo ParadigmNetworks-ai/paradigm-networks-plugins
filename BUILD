@@ -3,7 +3,7 @@
 # release came from. SHA256SUMS lists the pn-plugin binaries' checksums; CI
 # checks them on every change.
 source_repository: ParadigmNetworks-ai/paradigm-networks-plugins-source
-source_commit: f23ecc1835c4f8d97b2c830fa5b0595b1e81b5f6
+source_commit: eb97b0dffe42df082f3f05cb3f88388dc2979b90
 source_branch: develop
-version: 0.1.1
+version: 0.1.2
 go: go1.27.3

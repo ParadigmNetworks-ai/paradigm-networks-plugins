@@ -4,6 +4,12 @@ What's new in the Paradigm Networks plugins, newest first.
 
 ## Unreleased
 
+## v0.1.2, 2026-11-16
+
+- The Claude Code plugin's manifest now states that it needs Claude Code 2.1.295 or later. On
+  older versions, a check that crashes or times out lets the prompt or tool call through
+  instead of blocking it, so update Claude Code if yours is older.
+
 ## v0.1.1, 2026-11-11
 
 - Logging in and out works when your home folder's name has a space in it (for example
