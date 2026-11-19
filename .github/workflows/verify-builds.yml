@@ -3,19 +3,19 @@ name: verify-builds
 # This repository is published by release/release.sh in Paradigm Networks'
 # source repository; BUILD records which commit each release came from.
 # This checks that the pn-plugin binaries are exactly the ones listed in
-# SHA256SUMS, with none missing and none extra; that each plugin's
-# bin/SHA256SUMS, which its launcher checks the binaries against before every
-# run, lists exactly those binaries under this release's version (a stale list
-# would stop the plugin for every user); that each list is signed with the
-# release key and the launchers, which require that signature, accept the
-# release (also under Windows PowerShell 5.1); and that a promotion to staging
-# or main carries exactly the files of the tagged release QA tested.
+# SHA256SUMS; that each plugin's bin/SHA256SUMS, the list the release key
+# signs, names its six builds and every other file the plugin ships, with
+# nothing missing or extra, and all match; that every release key the
+# launchers carry is pinned below and each list is signed with one; that the
+# launchers, which require that signature, accept the release (also under
+# Windows PowerShell 5.1); and that a promotion to staging or main carries
+# exactly the files of the tagged release QA tested, never an older version.
 #
 # Then, on a push, it finishes the release: on develop it tags the merge commit
-# v<version> (stage 2, with the pn-plugins-release App, the only one allowed to
-# create v* tags), and on main it publishes the GitHub Release for that tag
-# (stage 3). Stage 1, which builds, signs and opens the release PR, runs in the
-# source repository.
+# v<version> (stage 2, with the pn-plugins-release App, the only one allowed
+# to create v* tags), and on main it publishes the GitHub Release for that tag
+# (stage 3, with the job's own token). Stage 1, which builds, signs
+# and opens the release PR, runs in the source repository.
 
 on:
   pull_request:
@@ -23,6 +23,17 @@ on:
     branches: [develop, main]
 
 permissions: {}
+
+env:
+  # The release keys, by the SHA-256 of each one's DER public key. Every key
+  # the launchers carry must be one of these, and every list must be signed
+  # with one (.github/scripts/check-signatures.sh), so a release can't bring in
+  # a key of its own. Pinned here because the release App can't change this
+  # repository's workflows. To add the next key: add its fingerprint here in a
+  # reviewed PR, one release before it signs (release/signing/README.md in the
+  # source repository).
+  RELEASE_KEYS: >-
+    1ecb9232ad0f32a2ae04d183cc4c51e5b94f8b35decc6196cbdf895393150d5a
 
 jobs:
   verify:
@@ -32,7 +43,27 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
+          fetch-depth: 0
           persist-credentials: false
+      # On a pull request, the checks come from the branch it targets, not from
+      # the pull request: the release App can't change workflows, but it could
+      # change .github/scripts. A change to the checks takes effect once merged.
+      - name: Trusted checks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          checks="$RUNNER_TEMP/checks"
+          mkdir "$checks"
+          for f in check-lists.sh check-signatures.sh; do
+            if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:.github/scripts/$f" 2>/dev/null; then
+              git show "$BASE_SHA:.github/scripts/$f" >"$checks/$f"
+            else
+              # A push, or the pull request that first brings the checks in.
+              cp ".github/scripts/$f" "$checks/$f"
+            fi
+          done
+          chmod +x "$checks"/*
+          echo "CHECKS=$checks" >>"$GITHUB_ENV"
       - name: Binaries match SHA256SUMS
         run: |
           sha256sum --check --strict SHA256SUMS
@@ -43,7 +74,10 @@ jobs:
             diff <(echo "$listed") <(echo "$present") || true
             exit 1
           fi
-      - name: Each plugin's bin/SHA256SUMS lists its binaries
+      # Each plugin's bin/SHA256SUMS is the list the release key signs: its six
+      # builds, which the launcher checks before every run, and every other
+      # file the plugin ships (hooks, scripts, skills, launchers, plugin.json).
+      - name: Each plugin's list names every file it ships, and all match
         run: |
           version="$(sed -n 's/^version: *//p' BUILD)"
           for plugin in claude cursor; do
@@ -53,21 +87,15 @@ jobs:
               echo "::error::$manifest says $plugin_version, BUILD says $version."
               exit 1
             fi
-            want="$(cd "$plugin/bin" && for f in pn-plugin-*; do
-              sha256sum "$f" | awk -v f="$f" -v v="$version" '{ sub(/^pn-plugin-/, "", f); print $1 "  pn-plugin-" v "-" f }'
-            done | sort)"
-            if [ "$want" != "$(sort "$plugin/bin/SHA256SUMS")" ]; then
-              echo "::error::$plugin/bin/SHA256SUMS doesn't list exactly the binaries in $plugin/bin for v$version."
-              diff <(echo "$want") <(sort "$plugin/bin/SHA256SUMS") || true
-              exit 1
-            fi
           done
+          "$CHECKS/check-lists.sh" . "$version"
       # The launchers carry the release public key and require a signature; run
       # them as users do. "pn-plugin version" checks the signature and the
       # build before printing the version.
       - name: Releases are signed, and the launchers accept them
         run: |
           version="$(sed -n 's/^version: *//p' BUILD)"
+          "$CHECKS/check-signatures.sh" .
           for setting in "claude/bin/pn-plugin:require_signature=1" "cursor/bin/pn-plugin:require_signature=1" \
             'cursor/bin/verify.ps1:$RequireSignature = $true' 'cursor/scripts/run-hook.cmd:set "PN_REQUIRE_SIGNATURE=1"'; do
             file="${setting%%:*}"
@@ -105,6 +133,8 @@ jobs:
     # A PR into staging or main must bring exactly the plugin files of the
     # release tagged on develop (v<version> from BUILD): what QA tested is what
     # users get. Needs the tag, so the release must have been tagged first.
+    # It can't go back to an older version either: an older release may not
+    # require signatures, or may have a bug a later one fixed.
     if: github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'main')
     runs-on: ubuntu-latest
     permissions:
@@ -114,9 +144,16 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Same files as the tested release
+      - name: Same files as the tested release, and not older
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
           version="$(sed -n 's/^version: *//p' BUILD)"
+          base_version="$(git show "origin/$BASE_REF:BUILD" 2>/dev/null | sed -n 's/^version: *//p')"
+          if [ -n "$base_version" ] && [ "$(printf '%s\n' "$base_version" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "::error::This promotion would take $BASE_REF from v$base_version back to v$version."
+            exit 1
+          fi
           if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
             echo "::error::v$version isn't tagged yet. Tag the release on develop before promoting it."
             exit 1
@@ -134,19 +171,21 @@ jobs:
 
   tag:
     # Stage 2: when a release PR is merged into develop, tag the merge commit
-    # v<version>, which QA then tests. Each plugin's list must be signed with a
-    # key the last tagged release's launchers carry, so a release PR can't
-    # bring in a key of its own. A push that isn't a new release (its version
-    # is already tagged) tags nothing.
+    # v<version>, which QA then tests. The list must be signed with a pinned
+    # release key (RELEASE_KEYS above), so neither a release PR nor a stray tag
+    # can bring in a key of its own. A push that isn't a new release (its
+    # version is already tagged) tags nothing.
     needs: [verify, windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     # Holds the pn-plugins-release App's key; deployment branch develop only,
-    # so pull requests and other branches can't reach it.
+    # so pull requests and other branches can't reach it. Only the App and org
+    # admins may create v* tags (ruleset plugins-release-tag-creation; GitHub
+    # doesn't let a ruleset exempt GitHub Actions itself).
     environment: release-publish
     concurrency:
-      group: release-publish
+      group: release-tag-${{ github.sha }}
       cancel-in-progress: false
     permissions:
       contents: read
@@ -155,7 +194,7 @@ jobs:
         with:
           fetch-depth: 0 # every tag, to find the last release
           persist-credentials: false
-      - name: A new release, signed with a key the last release trusts
+      - name: A new release, signed with a pinned key
         id: check
         run: |
           version="$(sed -n 's/^version: *//p' BUILD)"
@@ -181,42 +220,10 @@ jobs:
             echo "::error::$tag isn't higher than the last release, $last."
             exit 1
           fi
-
-          for plugin in claude cursor; do
-            anchor="$last"
-            if [ -z "$last" ] || ! git show "$last:$plugin/bin/pn-plugin" | grep -q 'BEGIN PUBLIC KEY'; then
-              # Only the first signed release: no earlier release carries a key,
-              # so the key is this release's own (checked against KMS when it was
-              # signed, and reviewed in the release PR).
-              anchor=HEAD
-              echo "::notice::No earlier release of $plugin carries a release key: checking against this release's own key (first signed release)."
-            fi
-            git show "$anchor:$plugin/bin/pn-plugin" >"$RUNNER_TEMP/launcher"
-            signed=0
-            for n in 1 2; do
-              # release_key_<n>='<PEM>', over several lines; empty when unused.
-              awk -v n="$n" -v q="'" '
-                index($0, "release_key_" n "=" q) == 1 { on = 1; sub("^[^" q "]*" q, "") }
-                on { if (index($0, q)) { sub(q ".*", ""); if ($0 != "") print; exit } print }' \
-                "$RUNNER_TEMP/launcher" >"$RUNNER_TEMP/key.pem"
-              if [ -s "$RUNNER_TEMP/key.pem" ] &&
-                openssl dgst -sha256 -verify "$RUNNER_TEMP/key.pem" \
-                  -signature "$plugin/bin/SHA256SUMS.sig" "$plugin/bin/SHA256SUMS" >/dev/null 2>&1; then
-                signed=1
-              fi
-            done
-            rm -f "$RUNNER_TEMP/launcher" "$RUNNER_TEMP/key.pem"
-            if [ "$signed" != 1 ]; then
-              echo "::error::$plugin/bin/SHA256SUMS isn't signed with a key in $plugin/bin/pn-plugin at $anchor."
-              exit 1
-            fi
-            echo "$plugin: signed with a key in its launcher at $anchor."
-          done
+          .github/scripts/check-signatures.sh .
           echo "tag=$tag" >>"$GITHUB_OUTPUT"
-
-      # The App is the only one, apart from org admins, that may create v* tags
-      # (ruleset plugins-release-tag-creation). Its token covers this
-      # repository only, with contents write and nothing else.
+      # The App's token covers this repository only, with contents write and
+      # nothing else, and is minted only once the checks above have passed.
       - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         if: steps.check.outputs.tag != ''
         id: app
@@ -249,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     concurrency:
-      group: release-publish
+      group: release-publish-${{ github.sha }}
       cancel-in-progress: false
     permissions:
       contents: write # create the release
@@ -273,6 +280,11 @@ jobs:
           fi
           if ! git merge-base --is-ancestor "$tag" HEAD; then
             echo "::error::$tag isn't in main's history: main didn't get this release through the promotion PRs."
+            exit 1
+          fi
+          previous="$(git show HEAD^1:BUILD 2>/dev/null | sed -n 's/^version: *//p')"
+          if [ -n "$previous" ] && [ "$(printf '%s\n' "$previous" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "::error::main went from v$previous back to v$version. Promote a newer release instead."
             exit 1
           fi
           paths=(.claude-plugin .cursor-plugin claude cursor BUILD SHA256SUMS)
