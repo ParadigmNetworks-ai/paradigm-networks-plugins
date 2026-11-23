@@ -3,22 +3,129 @@ name: verify-builds
 # This repository is published by release/release.sh in Paradigm Networks'
 # source repository; BUILD records which commit each release came from.
 # This checks that the pn-plugin binaries are exactly the ones listed in
-# SHA256SUMS, with none missing and none extra, and tags each release
-# (v<version> from BUILD) once it reaches develop.
+# SHA256SUMS; that each plugin's bin/SHA256SUMS, the list the release key
+# signs, names its six builds and every other file the plugin ships, with
+# nothing missing or extra, and all match; that every release key the
+# launchers carry is pinned below and each list is signed with one; that the
+# pinned files (LAUNCHER_CODE below: both launchers, verify.ps1, run-hook.cmd,
+# both hooks.json, the login/logout/check-configured scripts, every skill's
+# SKILL.md, cursor/rules/pn-login-check.mdc, the three .gitattributes, and
+# both plugin.json and marketplace.json with their version normalized) are
+# the code pinned
+# below, apart from their keys and require-signature switch, and that nothing
+# else in the plugins can load or run (no .mcp.json, .lsp.json,
+# settings.json, commands, agents, new skills or rules, extra hooks or
+# scripts); that the launchers, which require that signature, accept the
+# release (also under Windows PowerShell 5.1); and that a promotion to
+# staging or main carries exactly the files of the tagged release QA tested,
+# never an older version.
+#
+# Then, on a push, it finishes the release: on develop it checks the draft
+# GitHub Release stage 1 made, tags the merge commit v<version> and publishes
+# the draft as a pre-release for QA (stage 2, with the pn-plugins-release App,
+# the only one allowed to create v* tags); on main it checks that release
+# again and makes it the latest release (stage 3, with the job's own token).
+# Stage 1, which builds, signs, opens the release PR and makes the draft,
+# runs in the source repository.
 
 on:
   pull_request:
   push:
-    branches: [develop]
+    branches: [develop, main]
 
-permissions:
-  contents: read
+permissions: {}
+
+env:
+  # The release keys, by the SHA-256 of each one's DER public key. Every key
+  # the launchers carry must be one of these, and every list must be signed
+  # with one (.github/scripts/check-signatures.sh), so a release can't bring in
+  # a key of its own. Pinned here because the release App can't change this
+  # repository's workflows. To add the next key: add its fingerprint here in a
+  # reviewed PR, one release before it signs (release/signing/README.md in the
+  # source repository).
+  RELEASE_KEYS: >-
+    1ecb9232ad0f32a2ae04d183cc4c51e5b94f8b35decc6196cbdf895393150d5a
+  # The code that checks a release before it runs, pinned: the SHA-256 of
+  # each file with its keys block and require-signature line replaced by
+  # placeholders (.github/scripts/check-code.sh), of the hooks, login
+  # scripts, skills and Cursor rule as they are (a skill can run commands as
+  # it loads, outside the hooks), and of the plugin.json and marketplace.json files
+  # with their version replaced by a placeholder. Everything else in these
+  # files must be exactly this, so a launcher can't check differently or read
+  # a key from elsewhere, a hook can't run something else, and a manifest
+  # can't point at another hooks file or add MCP/LSP servers, commands or
+  # agents; a version bump alone keeps the pins. A change to them needs
+  # its new pin added next to the old one here, in a reviewed PR merged
+  # before the release that brings it; a file passes on any of its pins.
+  # Remove the old pin once that release is on main. A pin for a file the
+  # base branch's check-code.sh doesn't know is only a warning there, so the
+  # pins for a newly pinned file land first (or with the script that requires
+  # them), never after it. To recompute, in
+  # the source repository at the release commit (the same values come from a
+  # released tree with .github/scripts/check-code.sh --print .):
+  #   release/public/.github/scripts/check-code.sh --print .
+  LAUNCHER_CODE: >-
+    claude/bin/pn-plugin=6768edef21986dff4af71b0c04970681296bac7a9506d77ce69203a80918ac4f
+    cursor/bin/pn-plugin=dde70d5072d05f87384a5322ae5f58940b1cf355f326a3b412da470718c6e323
+    cursor/bin/verify.ps1=c0c64b8127dce489c463a146af3c709bad9c69dede0985a7459ee78e3050f54e
+    cursor/scripts/run-hook.cmd=9051db2704d6b64b98a9a0b0e9c97042e6e4b4953f875e3f79663a84b02b21d2
+    claude/hooks/hooks.json=fc4d410f9af152ed2ed07e542c3362ed9cd8796dfabd978064eb2821e9b58a65
+    claude/scripts/check-configured.sh=175f2ae3106abdf18d7f38d41e4cd0c8eb497a0c303debb245b28cbaabdce63e
+    claude/scripts/login.sh=10ea4a08a8bc30ddb76a0ff01cb5a121f01479722101cf53167493cc96697b82
+    claude/scripts/logout.sh=f0c166697cc3a5167d0077e5034354a74447955352fc86bb3936d31e421689f7
+    cursor/hooks/hooks.json=32448bcb1437895fe965dd4639a3e3f6ad637e918452c0bb9b517c06a38c018b
+    cursor/scripts/check-configured.ps1=5a15441ec9d2484d145d2a27543df3f232e06fcc353495c424a8cb8fbd1a26e2
+    cursor/scripts/check-configured.sh=ee50a9d5dc38e14c8ae41af3fec8a6f0e0c1e0420f490af9b9ccb53feba7c940
+    cursor/scripts/login.ps1=812f00040d91340e71747cec50369a773593006b41e19020b77e3cda691e3923
+    cursor/scripts/login.sh=ae2db8700738674573f377d844f1cb090e96be31aea57ec4e44772f4f905f608
+    cursor/scripts/logout.ps1=3951d5bb0be5c27ad0c4ec652c72a60340fe06a8f829048df6b63152e5d9ad70
+    cursor/scripts/logout.sh=574bff1d5168d5645aaf847f1070f07d6a8bab9d13547203ccf3e12729f9c2a9
+    claude/skills/paradigmnetworks-login/SKILL.md=375061750fc1043894eb17291ec8ec120fe5c2c8a514edcd33fca2ced1290df0
+    claude/skills/paradigmnetworks-logout/SKILL.md=fb9a649a11e78f6b53c0ee16bb1826fe660fb46e4dfdb9f33df129662e6674c0
+    cursor/skills/paradigmnetworks-login/SKILL.md=17c8e4340a5aec877a27c4318385e7acf6ed0d3803a599497e8fea77d6b38639
+    cursor/skills/paradigmnetworks-logout/SKILL.md=29e2f807d51e6a606ee8a62b1355e17ce3aad9e8a84da43e200519a2e0b00afe
+    cursor/rules/pn-login-check.mdc=0f2fb6cbda068924fd9986fef5e362e0ccc8297304ed27a56efe5af46bf7c5a7
+    claude/.claude-plugin/plugin.json=e3a2c5cea4724ba4832bc3c315171a0d1114c4ac1f8c523d05c1ee4ef4bd8c58
+    cursor/.cursor-plugin/plugin.json=4ddc85cc1daf38d7d896d7e37c852dcd3cb95b0f56fc28734830ff19265bde7e
+    .claude-plugin/marketplace.json=0e5d4e08513f1a25605f2afa1ca3fc3a86df9fc95756828000b0f5684eb978ea
+    .cursor-plugin/marketplace.json=65fe416a87e6c4910dba1a8fd67e92f34cf04767c02c1eba58c30beca62979ea
+    .gitattributes=b8fad6b41bd17b88c6a4c4dcbe289fb4e02ae2575fcf1a39bce2befae3aee8f5
+    claude/.gitattributes=04f6d91ebefe4619606597f3b1786dcc7d2575826cd56704a4ea20257df78b5c
+    cursor/.gitattributes=1b26297f46baae5432ed0ae48737362026b2d7857ab71be4f06759b3b3d6dd41
 
 jobs:
   verify:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # On a pull request, the checks come from the branch it targets, not from
+      # the pull request: the release App can't change workflows, but it could
+      # change .github/scripts. A change to the checks takes effect once merged.
+      - name: Trusted checks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          checks="$RUNNER_TEMP/checks"
+          mkdir "$checks"
+          for f in check-code.sh check-lists.sh check-signatures.sh; do
+            if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:.github/scripts/$f" 2>/dev/null; then
+              git show "$BASE_SHA:.github/scripts/$f" >"$checks/$f"
+            else
+              # A push, or the pull request that first brings the checks in.
+              cp ".github/scripts/$f" "$checks/$f"
+            fi
+          done
+          chmod +x "$checks"/*
+          echo "CHECKS=$checks" >>"$GITHUB_ENV"
+      # TODO(PN-15553): once the builds leave the tree, they live only on the
+      # GitHub Release. Then this step, check-lists.sh's build check and the
+      # launcher run below must check the release's files instead (stage 2's
+      # check-release.sh), and the windows job must download them.
       - name: Binaries match SHA256SUMS
         run: |
           sha256sum --check --strict SHA256SUMS
@@ -29,25 +136,358 @@ jobs:
             diff <(echo "$listed") <(echo "$present") || true
             exit 1
           fi
+      # Each plugin's bin/SHA256SUMS is the list the release key signs: its six
+      # builds, which the launcher checks before every run, and every other
+      # file the plugin ships (hooks, scripts, skills, launchers, plugin.json).
+      - name: Each plugin's list names every file it ships, and all match
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          for plugin in claude cursor; do
+            manifest="$plugin/.$plugin-plugin/plugin.json"
+            plugin_version="$(sed -n 's/^  "version": *"\([^"]*\)".*/\1/p' "$manifest" | head -1)"
+            if [ "$plugin_version" != "$version" ]; then
+              echo "::error::$manifest says $plugin_version, BUILD says $version."
+              exit 1
+            fi
+          done
+          "$CHECKS/check-lists.sh" . "$version"
+      # Everything in the launchers, verify.ps1, run-hook.cmd, the hooks and
+      # the login scripts but the keys and require-signature switch is the
+      # pinned code (LAUNCHER_CODE).
+      - name: The launchers are the pinned code
+        run: '"$CHECKS/check-code.sh" .'
+      # The launchers carry the release public key and require a signature; run
+      # them as users do. "pn-plugin version" checks the signature and the
+      # build before printing the version.
+      - name: Releases are signed, and the launchers accept them
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          "$CHECKS/check-signatures.sh" .
+          for setting in "claude/bin/pn-plugin:require_signature=1" "cursor/bin/pn-plugin:require_signature=1" \
+            'cursor/bin/verify.ps1:$RequireSignature = $true' 'cursor/scripts/run-hook.cmd:set "PN_REQUIRE_SIGNATURE=1"'; do
+            file="${setting%%:*}"
+            if ! grep -qxF -- "${setting#*:}" "$file"; then
+              echo "::error::$file doesn't require a signature (${setting#*:})."
+              exit 1
+            fi
+          done
+          for plugin in claude cursor; do
+            got="$("$plugin/bin/pn-plugin" version)" || got=
+            if [ "$got" != "$version" ]; then
+              echo "::error::$plugin/bin/pn-plugin refuses this release: its list of builds isn't signed with the release key, or a build doesn't match."
+              exit 1
+            fi
+          done
+          echo "Both plugins' lists are signed with the release key."
 
-  tag:
-    # Tags v<version> from BUILD on the commit that brought the release to
-    # develop. Only this job can write, and only on a push to develop.
-    needs: verify
-    if: github.event_name == 'push'
+  windows:
+    # Cursor on Windows checks the signature with Windows PowerShell 5.1
+    # (cursor/bin/verify.ps1, the P1363 copy), not openssl.
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: verify.ps1 accepts the release
+        shell: cmd
+        run: |
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\bin\verify.ps1 -Arch amd64 || exit /b 1
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\bin\verify.ps1 -Arch arm64 || exit /b 1
+
+  promotion:
+    # A PR into staging or main must bring exactly the plugin files of the
+    # release tagged on develop (v<version> from BUILD): what QA tested is what
+    # users get. Needs the tag, so the release must have been tagged first.
+    # It can't go back to an older version either: an older release may not
+    # require signatures, or may have a bug a later one fixed.
+    if: github.event_name == 'pull_request' && (github.base_ref == 'staging' || github.base_ref == 'main')
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - name: Tag the release
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Same files as the tested release, and not older
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          base_version="$(git show "origin/$BASE_REF:BUILD" 2>/dev/null | sed -n 's/^version: *//p')"
+          if [ -n "$base_version" ] && [ "$(printf '%s\n' "$base_version" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "::error::This promotion would take $BASE_REF from v$base_version back to v$version."
+            exit 1
+          fi
+          if ! git rev-parse -q --verify "refs/tags/v$version" >/dev/null; then
+            echo "::error::v$version isn't tagged yet. Tag the release on develop before promoting it."
+            exit 1
+          fi
+          paths=(.claude-plugin .cursor-plugin claude cursor BUILD SHA256SUMS)
+          if ! git diff --quiet "v$version" HEAD -- "${paths[@]}"; then
+            echo "::error::This promotion's plugin files differ from v$version, the release QA tested."
+            git diff --stat "v$version" HEAD -- "${paths[@]}"
+            exit 1
+          fi
+          echo "Plugin files match v$version."
+
+  # Stages 2 and 3 of a release (release/README.md in the source repository).
+  # Both run only on a push, after verify and windows pass on that commit.
+  #
+  # Immutable releases are on in this repository. Once published, a release's
+  # files can't be added, replaced or deleted and its tag can't move, but its
+  # title, notes and pre-release/latest status can still change
+  # (https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository
+  # and https://docs.github.com/en/code-security/supply-chain-security/understanding-your-software-supply-chain/immutable-releases).
+  # So stage 1 attaches every file to a draft, stage 2 checks the draft and
+  # publishes it as a pre-release (immutable from then on), and stage 3 only
+  # checks it again and flips it to the latest release.
+
+  tag:
+    # Stage 2: when a release PR is merged into develop, check the draft
+    # GitHub Release v<version> that stage 1 made, tag the merge commit
+    # v<version>, and publish the draft as a pre-release, which QA then
+    # downloads and tests. The list must be signed with a pinned release key
+    # (RELEASE_KEYS above) and the launchers must be the pinned code
+    # (LAUNCHER_CODE), so neither a release PR nor a stray tag can bring in a
+    # key or a check of its own. A push that isn't a new release (its version
+    # is tagged on another commit) does nothing; a re-run on the tagged commit
+    # finishes publishing a pre-release that's still a draft.
+    needs: [verify, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Holds the pn-plugins-release App's key; deployment branch develop only,
+    # so pull requests and other branches can't reach it. Only the App and org
+    # admins may create v* tags (ruleset plugins-release-tag-creation; GitHub
+    # doesn't let a ruleset exempt GitHub Actions itself).
+    environment: release-publish
+    concurrency:
+      group: release-tag-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0 # every tag, to find the last release
+          persist-credentials: false
+      - name: A new release, signed with a pinned key, with the pinned launchers
+        id: check
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          tag="v$version"
+          if ! [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::BUILD's version \"$version\" isn't a plain release version (X.Y.Z)."
+            exit 1
+          fi
+          tagged=false
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            at="$(git rev-parse "$tag^{commit}")"
+            if [ "$at" != "$GITHUB_SHA" ]; then
+              # Fine only for a later push to develop (a CI change, say): the
+              # tag is on the earlier commit that brought this very BUILD, and
+              # this push doesn't change it. A tag on a commit with another
+              # BUILD, or this push being the release itself, means the tag
+              # was made elsewhere, for example by publishing the draft by
+              # hand, which tags the draft's target (an older develop).
+              if ! git show "$at:BUILD" 2>/dev/null | cmp -s - BUILD; then
+                echo "::error::$tag is on $at, whose BUILD isn't this release's ($version, this BUILD). The tag was made on the wrong commit, for example by publishing the draft release by hand (which tags the draft's target). Delete the tag (and turn a published release back into a draft), then re-run this job."
+                exit 1
+              fi
+              if ! git diff --quiet HEAD^ HEAD -- BUILD SHA256SUMS; then
+                echo "::error::This push is the release of $version (it changes BUILD or SHA256SUMS), but $tag is already on $at, not on this merge commit ($GITHUB_SHA). Delete the tag (and turn a published release back into a draft), then re-run this job."
+                exit 1
+              fi
+              if ! git merge-base --is-ancestor "$at" HEAD; then
+                echo "::error::$tag is on $at, which isn't in develop's history."
+                exit 1
+              fi
+              echo "$tag is already released on $at (same BUILD), and this push doesn't change BUILD or SHA256SUMS: it isn't a release. Nothing to do."
+              exit 0
+            fi
+            # An earlier run tagged this commit; finish its pre-release.
+            echo "$tag is already this commit."
+            tagged=true
+          else
+            if git diff --quiet HEAD^ HEAD -- BUILD SHA256SUMS; then
+              echo "::error::$tag isn't tagged, but this commit doesn't change BUILD or SHA256SUMS: it isn't a release."
+              exit 1
+            fi
+            last="$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 || true)"
+            if [ -n "$last" ] && [ "$(printf '%s\n' "$last" "$tag" | sort -V | tail -1)" != "$tag" ]; then
+              echo "::error::$tag isn't higher than the last release, $last."
+              exit 1
+            fi
+          fi
+          .github/scripts/check-code.sh .
+          .github/scripts/check-lists.sh . "$version"
+          .github/scripts/check-signatures.sh .
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "tagged=$tagged"
+          } >>"$GITHUB_OUTPUT"
+      # The App's token covers this repository only, with contents write and
+      # nothing else (drafts are visible only with write access), and is
+      # minted only once the checks above have passed.
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        if: steps.check.outputs.tag != ''
+        id: app
+        with:
+          app-id: ${{ secrets.RELEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+      # Before anything is tagged: the draft holds exactly the six builds, each
+      # matching its line in both signed lists, and both lists with their
+      # signatures, byte for byte this commit's.
+      - name: The draft release has exactly the signed files
+        if: steps.check.outputs.tag != ''
+        id: release
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: .github/scripts/check-release.sh . "$VERSION"
+      - name: Tag the merge commit
+        if: steps.check.outputs.tag != '' && steps.check.outputs.tagged != 'true' && steps.release.outputs.draft == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          TAG: ${{ steps.check.outputs.tag }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$TAG" -f sha="$GITHUB_SHA" >/dev/null
+          got="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)"
+          if [ "$got" != "$GITHUB_SHA" ]; then
+            echo "::error::$TAG points at $got, not $GITHUB_SHA."
+            exit 1
+          fi
+          echo "Tagged $GITHUB_SHA as $TAG."
+      - name: Publish the pre-release for QA
+        if: steps.check.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+          TAG: ${{ steps.check.outputs.tag }}
+          TAGGED: ${{ steps.check.outputs.tagged }}
+          DRAFT: ${{ steps.release.outputs.draft }}
+        run: |
+          if [ "$DRAFT" != true ]; then
+            # Published already. Fine on a re-run for the commit an earlier
+            # run tagged; with no tag, something other than stage 2 published
+            # it (the step above tags only a draft), so stop here.
+            if [ "$TAGGED" != true ]; then
+              echo "::error::$TAG is already published, but isn't tagged: stage 2 didn't publish it. Check the release before going on."
+              exit 1
+            fi
+            echo "$TAG is already published. Nothing to do."
+            exit 0
+          fi
+          # Not the latest release: users get it only once stage 3 promotes it.
+          # The title and notes stay stage 1's until then.
+          gh release edit "$TAG" --draft=false --prerelease --latest=false --verify-tag
+          # Published, so immutable from now on: check what got published (the
+          # draft could have changed after the check above).
+          GITHUB_OUTPUT="$RUNNER_TEMP/published" .github/scripts/check-release.sh . "$VERSION"
+          for want in draft=false prerelease=true immutable=true; do
+            if ! grep -qxF "$want" "$RUNNER_TEMP/published"; then
+              echo "::error::$TAG was published but isn't $want. Check the release and the repository's immutable releases setting."
+              exit 1
+            fi
+          done
+          echo "Published $TAG as a pre-release. QA downloads and tests it; stage 3 makes it the latest release once it reaches main."
+
+  publish:
+    # Stage 3: when a release reaches main (what users install), check main
+    # has exactly the tagged files, whose code, lists and signatures it checks
+    # again, check the pre-release stage 2 published still holds exactly the
+    # signed files (it can't change, being immutable), then make it a full
+    # release, marked latest, with notes from CHANGELOG.md. It attaches
+    # nothing: an immutable release can't take new files. A version already
+    # promoted is left alone. Uses this job's own token: it creates no tag.
+    needs: [verify, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: release-publish-${{ github.sha }}
+      cancel-in-progress: false
+    permissions:
+      contents: write # change the release's pre-release/latest status and notes
+    env:
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Main has exactly the tagged files
+        id: check
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          tag="v$version"
+          if ! git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "::error::$tag isn't tagged. Stage 2 tags a release when it's merged into develop; promote only tagged releases."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$tag" HEAD; then
+            echo "::error::$tag isn't in main's history: main didn't get this release through the promotion PRs."
+            exit 1
+          fi
+          previous="$(git show HEAD^1:BUILD 2>/dev/null | sed -n 's/^version: *//p')"
+          if [ -n "$previous" ] && [ "$(printf '%s\n' "$previous" "$version" | sort -V | tail -1)" != "$version" ]; then
+            echo "::error::main went from v$previous back to v$version. Promote a newer release instead."
+            exit 1
+          fi
+          paths=(.claude-plugin .cursor-plugin claude cursor BUILD SHA256SUMS)
+          if ! git diff --quiet "$tag" HEAD -- "${paths[@]}"; then
+            echo "::error::main's plugin files differ from $tag, the release QA tested."
+            git diff --stat "$tag" HEAD -- "${paths[@]}"
+            exit 1
+          fi
+          # Again on the tagged files: the launchers are the pinned code, the
+          # lists name every file and match, and are signed with a pinned key.
+          # Stage 2 checks this before it tags, but the App could create a v*
+          # tag without it.
+          .github/scripts/check-code.sh .
+          .github/scripts/check-lists.sh . "$version"
+          .github/scripts/check-signatures.sh .
+          echo "version=$version" >>"$GITHUB_OUTPUT"
+          echo "tag=$tag" >>"$GITHUB_OUTPUT"
+      - name: The release has exactly the signed files
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+        run: .github/scripts/check-release.sh . "$VERSION"
+      - name: Make it the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.check.outputs.version }}
+          TAG: ${{ steps.check.outputs.tag }}
+          DRAFT: ${{ steps.release.outputs.draft }}
+          PRERELEASE: ${{ steps.release.outputs.prerelease }}
+          IMMUTABLE: ${{ steps.release.outputs.immutable }}
         run: |
-          tag="v$(sed -n 's/^version: *//p' BUILD)"
-          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-            echo "$tag already exists"
-          else
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
-            echo "Tagged $GITHUB_SHA as $tag"
+          if [ "$DRAFT" != false ]; then
+            echo "::error::$TAG is still a draft. Stage 2 (the tag job on develop) publishes it as a pre-release for QA; re-run it for the release commit, and promote only after QA."
+            exit 1
           fi
+          if [ "$IMMUTABLE" != true ]; then
+            echo "::error::$TAG isn't immutable. Turn immutable releases on for this repository; a release that can change can't be promoted."
+            exit 1
+          fi
+          if [ "$PRERELEASE" = false ]; then
+            echo "$TAG is already a full release. Nothing to do."
+            exit 0
+          fi
+          .github/scripts/release-notes.sh . "$VERSION" >"$RUNNER_TEMP/notes.md"
+          gh release edit "$TAG" --prerelease=false --latest --notes-file "$RUNNER_TEMP/notes.md"
+          latest="$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)"
+          if [ "$latest" != "$TAG" ]; then
+            echo "::error::$TAG was promoted, but the latest release is $latest."
+            exit 1
+          fi
+          echo "$TAG is the latest release."
