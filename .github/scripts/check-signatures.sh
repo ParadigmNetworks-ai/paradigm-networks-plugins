@@ -6,10 +6,10 @@
 # Usage: RELEASE_KEYS="<sha256> ..." .github/scripts/check-signatures.sh <tree>
 #
 # Fails unless:
-#   - every key in claude/bin/pn-plugin, cursor/bin/pn-plugin and
-#     cursor/bin/verify.ps1 is a pinned key, so no release can ship a key of
+#   - every key in claude/runtime/pn-plugin, cursor/runtime/pn-plugin and
+#     cursor/runtime/verify.ps1 is a pinned key, so no release can ship a key of
 #     its own;
-#   - each plugin's bin/SHA256SUMS.sig verifies with a pinned key in that
+#   - each plugin's runtime/SHA256SUMS.sig verifies with a pinned key in that
 #     plugin's launcher.
 # A new key is pinned by a reviewed change to this repository's workflows,
 # which the release App can't make.
@@ -65,7 +65,7 @@ split() {
 }
 
 for plugin in claude cursor; do
-  launcher="$tree/$plugin/bin/pn-plugin"
+  launcher="$tree/$plugin/runtime/pn-plugin"
   split "$launcher" "$plugin"
 
   # The block: release_key_1 then release_key_2, each exactly once, each
@@ -93,26 +93,26 @@ for plugin in claude cursor; do
     }
     END { if (err) exit 1; if (state != 0) { print "release_key_" slot " isn'"'"'t closed"; exit 1 }
           if (slot != 2) { print "release_key_1 and release_key_2 must both be there"; exit 1 } }' \
-    "$tmp/$plugin.block" >"$tmp/why" || die "$plugin/bin/pn-plugin: $(cat "$tmp/why")"
+    "$tmp/$plugin.block" >"$tmp/why" || die "$plugin/runtime/pn-plugin: $(cat "$tmp/why")"
 
   signed=0
   for n in 1 2; do
     [[ -s "$tmp/key$n.pem" ]] || continue
     openssl pkey -pubin -in "$tmp/key$n.pem" -outform DER -out "$tmp/key.der" 2>/dev/null ||
-      die "$plugin/bin/pn-plugin: release_key_$n isn't a public key"
+      die "$plugin/runtime/pn-plugin: release_key_$n isn't a public key"
     fp="$(fingerprint "$tmp/key.der")"
-    pinned "$fp" || die "$plugin/bin/pn-plugin carries a release key that isn't pinned (release_key_$n, SHA-256 $fp)"
-    if openssl dgst -sha256 -verify "$tmp/key$n.pem" -signature "$tree/$plugin/bin/SHA256SUMS.sig" \
-      "$tree/$plugin/bin/SHA256SUMS" >/dev/null 2>&1; then
+    pinned "$fp" || die "$plugin/runtime/pn-plugin carries a release key that isn't pinned (release_key_$n, SHA-256 $fp)"
+    if openssl dgst -sha256 -verify "$tmp/key$n.pem" -signature "$tree/$plugin/runtime/SHA256SUMS.sig" \
+      "$tree/$plugin/runtime/SHA256SUMS" >/dev/null 2>&1; then
       signed=1
     fi
   done
-  [[ "$signed" == 1 ]] || die "$plugin/bin/SHA256SUMS isn't signed with a pinned release key"
+  [[ "$signed" == 1 ]] || die "$plugin/runtime/SHA256SUMS isn't signed with a pinned release key"
   echo "$plugin: signed with a pinned release key."
 done
 
 # verify.ps1 carries the same keys as X and Y coordinates, in its block.
-ps1="$tree/cursor/bin/verify.ps1"
+ps1="$tree/cursor/runtime/verify.ps1"
 split "$ps1" ps1
 # The block is exactly: $ReleaseKeys = @( , one @{ X = "…"; Y = "…" } line per
 # key, and ).
@@ -123,13 +123,13 @@ awk -v pair='^[[:space:]]*@\\{[[:space:]]*X[[:space:]]*=[[:space:]]*"[0-9a-fA-F]
   /^[[:space:]]*\)[[:space:]]*$/ { closed = 1; next }
   $0 !~ pair { exit 1 }
   END { if (!closed) exit 1 }' "$tmp/ps1.block" ||
-  die "cursor/bin/verify.ps1: its pn-release-signing keys block must be only \$ReleaseKeys = @( , one @{ X = \"…\"; Y = \"…\" } line per key, and )"
+  die "cursor/runtime/verify.ps1: its pn-release-signing keys block must be only \$ReleaseKeys = @( , one @{ X = \"…\"; Y = \"…\" } line per key, and )"
 pairs="$(grep -oiE 'X[[:space:]]*=[[:space:]]*"[0-9a-f]{64}"[[:space:]]*;[[:space:]]*Y[[:space:]]*=[[:space:]]*"[0-9a-f]{64}"' "$tmp/ps1.block" |
   sed -E 's/[^"]*"([0-9a-fA-F]{64})"[^"]*"([0-9a-fA-F]{64})"/\1\2/' | tr 'A-F' 'a-f')" || true
-[[ -n "$pairs" ]] || die "cursor/bin/verify.ps1 carries no release key"
+[[ -n "$pairs" ]] || die "cursor/runtime/verify.ps1 carries no release key"
 while read -r xy; do
   printf '%s04%s' "$spki_header" "$xy" | xxd -r -p >"$tmp/key.der"
   fp="$(fingerprint "$tmp/key.der")"
-  pinned "$fp" || die "cursor/bin/verify.ps1 carries a release key that isn't pinned (SHA-256 $fp)"
+  pinned "$fp" || die "cursor/runtime/verify.ps1 carries a release key that isn't pinned (SHA-256 $fp)"
 done <<<"$pairs"
 echo "Every key the launchers carry is pinned."

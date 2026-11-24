@@ -7,12 +7,12 @@
 #
 # The release (draft or published; exactly one for the tag) must have exactly
 # these files, all fully uploaded:
-#   - the six builds, under the names both plugins' bin/SHA256SUMS give them
+#   - the six builds, under the names both plugins' runtime/SHA256SUMS give them
 #     (pn-plugin-<version>-<os>-<arch>[.exe]); each build's SHA-256 must be
 #     its line in both lists;
 #   - claude-SHA256SUMS, claude-SHA256SUMS.sig, claude-SHA256SUMS.sig.p1363
 #     and the same for cursor: byte for byte the tree's
-#     <plugin>/bin/SHA256SUMS{,.sig,.sig.p1363}, which check-lists.sh and
+#     <plugin>/runtime/SHA256SUMS{,.sig,.sig.p1363}, which check-lists.sh and
 #     check-signatures.sh check.
 # Run those two (and check-code.sh) on the tree first.
 #
@@ -53,7 +53,7 @@ read -r id draft prerelease immutable <"$tmp/release"
 [[ "$id" =~ ^[0-9]+$ ]] || die "unexpected release id \"$id\""
 
 # What the release must hold. The two lists name the same builds.
-builds() { awk -v v="pn-plugin-$version-" 'index($2, v) == 1' "$tree/$1/bin/SHA256SUMS"; }
+builds() { awk -v v="pn-plugin-$version-" 'index($2, v) == 1' "$tree/$1/runtime/SHA256SUMS"; }
 cmp -s <(builds claude) <(builds cursor) || die "The two plugins' lists name different builds."
 builds claude >"$tmp/builds"
 [[ "$(grep -c . "$tmp/builds")" -eq 6 ]] || die "The lists don't name six builds of $version."
@@ -85,14 +85,14 @@ done <"$tmp/assets"
 while read -r _ name; do
   have="$("${sum[@]}" "$tmp/dl/$name" | cut -c1-64)"
   for plugin in claude cursor; do
-    want="$(awk -v n="$name" '$2 == n { print $1 }' "$tree/$plugin/bin/SHA256SUMS")"
-    [[ "$have" == "$want" ]] || die "$name in the GitHub Release for $tag doesn't match its line in $plugin/bin/SHA256SUMS."
+    want="$(awk -v n="$name" '$2 == n { print $1 }' "$tree/$plugin/runtime/SHA256SUMS")"
+    [[ "$have" == "$want" ]] || die "$name in the GitHub Release for $tag doesn't match its line in $plugin/runtime/SHA256SUMS."
   done
 done <"$tmp/builds"
 for plugin in claude cursor; do
   for f in SHA256SUMS SHA256SUMS.sig SHA256SUMS.sig.p1363; do
-    cmp -s "$tmp/dl/$plugin-$f" "$tree/$plugin/bin/$f" ||
-      die "$plugin-$f in the GitHub Release for $tag isn't this commit's $plugin/bin/$f."
+    cmp -s "$tmp/dl/$plugin-$f" "$tree/$plugin/runtime/$f" ||
+      die "$plugin-$f in the GitHub Release for $tag isn't this commit's $plugin/runtime/$f."
   done
 done
 

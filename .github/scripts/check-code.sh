@@ -9,8 +9,8 @@
 #        .github/scripts/check-code.sh --print <tree>
 #
 # The files (files= below):
-#   - the checks: claude/bin/pn-plugin, cursor/bin/pn-plugin,
-#     cursor/bin/verify.ps1 and cursor/scripts/run-hook.cmd;
+#   - the checks: claude/runtime/pn-plugin, cursor/runtime/pn-plugin,
+#     cursor/runtime/verify.ps1 and cursor/scripts/run-hook.cmd;
 #   - what starts them or the build: claude/hooks/hooks.json,
 #     cursor/hooks/hooks.json, claude/scripts/*.sh, cursor/scripts/*.sh and
 #     cursor/scripts/{login,logout,check-configured}.ps1;
@@ -48,7 +48,8 @@
 # Nothing else may ship in claude/, cursor/, .claude-plugin/ or
 # .cursor-plugin/ but the allowed kinds below (allowed()): LICENSE,
 # README.md, SECURITY.md, cursor/.gitignore, assets/*.png,
-# and the six builds and the signed lists in bin/. So a .mcp.json, .lsp.json,
+# and the signed lists in runtime/ (the builds aren't in the plugins: they're
+# on the GitHub Release). So a .mcp.json, .lsp.json,
 # settings.json, commands/, agents/, a new skill or rule, an extra hooks file
 # or script, ... fails here, even though the signed list names it.
 #
@@ -113,7 +114,7 @@ fi
 
 # The checks, with a keys block (but run-hook.cmd) and a require-signature
 # switch; the files hashed as they are; the manifests, with their version.
-checks=(claude/bin/pn-plugin cursor/bin/pn-plugin cursor/bin/verify.ps1 cursor/scripts/run-hook.cmd)
+checks=(claude/runtime/pn-plugin cursor/runtime/pn-plugin cursor/runtime/verify.ps1 cursor/scripts/run-hook.cmd)
 plain=(
   .gitattributes
   claude/.gitattributes
@@ -149,8 +150,8 @@ semver='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
 # shellcheck disable=SC2016 # PowerShell's $, literally
 switch() {
   case "$1" in
-    claude/bin/pn-plugin | cursor/bin/pn-plugin) off='require_signature=0' on='require_signature=1' ;;
-    cursor/bin/verify.ps1) off='$RequireSignature = $false' on='$RequireSignature = $true' ;;
+    claude/runtime/pn-plugin | cursor/runtime/pn-plugin) off='require_signature=0' on='require_signature=1' ;;
+    cursor/runtime/verify.ps1) off='$RequireSignature = $false' on='$RequireSignature = $true' ;;
     cursor/scripts/run-hook.cmd) off='set "PN_REQUIRE_SIGNATURE=0"' on='set "PN_REQUIRE_SIGNATURE=1"' ;;
     *) die "no require-signature switch known for $1" ;;
   esac
@@ -167,16 +168,14 @@ one_of() {
 }
 
 # allowed <relative path>: whether a file that isn't pinned may ship there.
-# These kinds start nothing: text, images, the builds (each checked against
-# the signed list by its launcher) and the lists with their signatures.
+# These kinds start nothing: text, images and the lists with their
+# signatures. Not a build: the plugins ship none.
 allowed() {
   local p='(claude|cursor)/'
   [[ "$1" =~ ^${p}(LICENSE|README\.md|SECURITY\.md)$ ||
     "$1" == cursor/.gitignore ||
     "$1" =~ ^${p}assets/[A-Za-z0-9._-]+\.png$ ||
-    "$1" =~ ^${p}bin/pn-plugin-(darwin|linux)-(amd64|arm64)$ ||
-    "$1" =~ ^${p}bin/pn-plugin-windows-(amd64|arm64)\.exe$ ||
-    "$1" =~ ^${p}bin/SHA256SUMS(\.sig|\.sig\.p1363)?$ ]] && return 0
+    "$1" =~ ^${p}runtime/SHA256SUMS(\.sig|\.sig\.p1363)?$ ]] && return 0
   # Only in the source repository: release/release.sh leaves the first out,
   # and the second is the gitignored rule pn-plugin writes in a checkout.
   ((print)) && [[ "$1" == cursor/CONTRIBUTING.md || "$1" == cursor/rules/paradigm-repo-context.mdc ]]
