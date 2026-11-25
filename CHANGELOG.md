@@ -2,7 +2,36 @@
 
 What's new in the Paradigm Networks plugins, newest first.
 
-## Unreleased
+## v0.1.3, 2026-11-25
+
+- Tool calls are now blocked when the plugin's program is missing or has been changed, or when
+  the plugin has no program for your computer. Before, they were let through without a policy
+  check. Reinstalling the plugin fixes a missing or changed program.
+- Releases are signed, and the plugin checks the signature before it runs its program. On Linux
+  this needs `openssl`, which most systems include; on minimal images without it (for example
+  Alpine), install it with `apk add openssl`. Without it, tool calls are blocked with the install
+  command.
+- NixOS is supported: the plugin's check finds the system tools it needs in NixOS's system
+  folder.
+- Cursor on Windows: the check of the plugin's program runs in Windows PowerShell, which must not
+  be locked down (Constrained Language Mode). If it is, the check can't run, and tool calls are
+  blocked with a message saying a Windows security policy blocks it, so your administrator knows
+  what to allow.
+- A clearer message when a system tool the plugin's check needs isn't installed: the message
+  names what's missing instead of failing for another reason.
+- The plugins no longer contain their program. The first time a plugin runs, and after each
+  update, it downloads the program for your computer (about 8 MB) from the plugin's GitHub
+  release, checks it, and keeps it in `~/.paradigm-networks/bin` (on Windows,
+  `%LOCALAPPDATA%\ParadigmNetworks\bin`). This needs access to `github.com` and
+  `release-assets.githubusercontent.com` (`HTTPS_PROXY` is used if set) and, on macOS and Linux,
+  `curl`. If the program can't be downloaded, tool calls are blocked with a message saying so. For
+  a computer that can't reach GitHub, put the program in that folder first; see the plugin's
+  README.
+- The plugin's launcher moved from `bin/` to `runtime/` in each plugin, so Claude.ai organization
+  plugins and Cowork accept the plugin.
+- Cursor on Windows: tool calls and prompts are now always checked. Cursor can start the
+  information it sends the plugin with an invisible marker, which made the plugin treat it as
+  unreadable and let the tool call through without a policy check.
 
 ## v0.1.2, 2026-11-16
 

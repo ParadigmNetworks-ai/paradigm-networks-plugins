@@ -1,2 +1,4 @@
 *.sh text eol=lf
 *.mdc text eol=lf
+# Checked byte for byte by runtime/pn-plugin
+runtime/SHA256SUMS* binary

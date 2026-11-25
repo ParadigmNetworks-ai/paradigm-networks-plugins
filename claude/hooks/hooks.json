@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-session",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-session",
             "timeout": 10
           }
         ]
@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-session-end",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-session-end",
             "timeout": 10
           }
         ]
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-prompt",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-prompt",
             "timeout": 250,
             "onFailure": "block"
           }
@@ -39,7 +39,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-tool-call",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-tool-call",
             "timeout": 250,
             "onFailure": "block"
           }
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-tool-call-record",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-tool-call-record",
             "timeout": 250,
             "async": true
           }
@@ -63,7 +63,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-tool-call-record",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-tool-call-record",
             "timeout": 250,
             "async": true
           }
@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/bin/pn-plugin hook check-turn-complete",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/runtime/pn-plugin hook check-turn-complete",
             "timeout": 15
           }
         ]

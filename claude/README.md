@@ -38,6 +38,19 @@ plugin:
 
 Then restart Claude Code.
 
+### Keep it up to date
+
+Claude Code doesn't update plugins from marketplaces like this one unless you
+turn it on. Run `/plugin`, open the **Marketplaces** tab, select
+`paradigm-networks-plugins` and turn auto-update on. New versions, including
+security fixes, then install by themselves; Claude Code tells you to run
+`/reload-plugins`, or uses them from your next session.
+
+To update by hand instead: in `/plugin`, open the plugin on the **Installed**
+tab and choose **Update now**, or run
+`claude plugin update paradigm-networks@paradigm-networks-plugins` in your
+shell.
+
 ### For admins
 
 To roll the plugin out to your organization, add the marketplace and enable
@@ -47,7 +60,8 @@ the plugin in Claude Code's managed settings:
 {
   "extraKnownMarketplaces": {
     "paradigm-networks-plugins": {
-      "source": { "source": "github", "repo": "ParadigmNetworks-ai/paradigm-networks-plugins" }
+      "source": { "source": "github", "repo": "ParadigmNetworks-ai/paradigm-networks-plugins" },
+      "autoUpdate": true
     }
   },
   "enabledPlugins": {
@@ -57,18 +71,78 @@ the plugin in Claude Code's managed settings:
 ```
 
 If your managed settings set `allowManagedHooksOnly`, the plugin's hooks run
-only when the plugin is enabled in managed settings like this.
+only when the plugin is enabled in managed settings like this. Without
+`autoUpdate`, managed machines don't pick up new versions by themselves.
+
+If your settings also turn Claude Code's own updates off (`DISABLE_UPDATES`,
+`DISABLE_AUTOUPDATER` or `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC`), that
+turns plugin updates off too, even with `autoUpdate`. To keep plugins
+updating, also set `FORCE_AUTOUPDATE_PLUGINS=1`, for example in the managed
+settings' `env`:
+
+```json
+{
+  "env": { "FORCE_AUTOUPDATE_PLUGINS": "1" }
+}
+```
 
 ### Requirements
 
 - Claude Code 2.1.295 or later.
 - macOS, Linux or Windows, on an Intel or ARM (Apple Silicon) processor.
-  Nothing else needs installing:
-  the plugin ships its own program for each. On Linux, `secret-tool`
+  Nothing else needs installing: the first time it runs, the plugin
+  downloads its program for your machine (about 8 MB) and keeps it (see
+  [Its program](#its-program)). On Linux, `secret-tool`
   (libsecret) lets the plugin keep your login in the Secret Service keyring;
   without it, see [Data handling](#data-handling).
+- Windows: [Git for Windows](https://git-scm.com/downloads/win). Claude Code
+  runs the plugin's hooks in its Git Bash; without it, the hooks can't run,
+  so prompts and tool calls are blocked.
+- The plugin checks its program before every run (see
+  [Verifying a release](../README.md#verifying-a-release)), with the system's
+  own tools: `openssl` (macOS and Git for Windows include it), or
+  `sha256sum` / `shasum` for the build's hash, from the system folders
+  (`/usr/bin`, `/bin`, `/usr/sbin`, `/sbin`, and on NixOS
+  `/run/current-system/sw/bin`). If one is missing, tool calls are blocked
+  with a message naming it.
+- Linux, including WSL, SSH remotes, dev containers and Codespaces (the
+  plugin runs where the agent runs): `openssl`, to check the release
+  signature. Debian and Ubuntu images, and almost every desktop distribution,
+  include it. Some minimal images don't (Alpine, RHEL and UBI minimal, Wolfi,
+  distroless): install it with `apk add openssl`, `microdnf install openssl`
+  or the image's package manager. Releases are signed and the plugin requires
+  the signature, so without openssl it blocks tool calls and says how to
+  install it.
 - Your organization's Paradigm Networks service must be reachable from your
   machine.
+
+## Its program
+
+The plugin doesn't contain its program. The first time it runs, and after
+each update, it downloads the build for your machine with the system's
+`curl` (macOS and most Linux distributions include it; some minimal images,
+such as Alpine, don't), from this plugin's GitHub Release:
+`github.com/ParadigmNetworks-ai/paradigm-networks-plugins`, which sends the
+download from `release-assets.githubusercontent.com` (or
+`objects.githubusercontent.com`). Allow those in your firewall or proxy;
+`HTTPS_PROXY` is used if you set it. GitHub sees your IP address when you
+download, as for any download from GitHub. Nothing else is sent.
+
+The program is kept in `~/.paradigm-networks/bin/<version>/` (on Windows,
+`%LOCALAPPDATA%\ParadigmNetworks\bin\<version>\`), a folder only you can use,
+and checked against the plugin's signed list before every run; an older
+version is removed after an update, once nothing has run it for 30 days. If it can't be downloaded or doesn't
+match, tool calls are blocked with a message saying why.
+
+**Machines that can't reach GitHub.** Download the build for the machine
+(`pn-plugin-<version>-<os>-<arch>`) from the release page of the plugin's
+version, and put it in that folder first, readable only by the user
+(`chmod 700` each folder, `chmod 500` the file). The plugin checks it as it
+would a download.
+
+**Uninstalling.** Removing the plugin leaves that folder: delete
+`~/.paradigm-networks` (`%LOCALAPPDATA%\ParadigmNetworks` on Windows) too, with
+the logs and caches below.
 
 ## Log in (one time per machine)
 
@@ -102,7 +176,7 @@ logging in to one doesn't log in the other.
 | `hooks/hooks.json` | Hooks for session start/end, prompt submit, tool calls and agent responses. These do the checking and recording. |
 | `skills/paradigmnetworks-login` | Logs this machine in to your Paradigm Networks deployment. |
 | `skills/paradigmnetworks-logout` | Revokes the login on the server and removes it from this machine. |
-| `bin/` | The program the hooks run (`pn-plugin`, one build per OS and processor). |
+| `runtime/` | The launcher the hooks run (`pn-plugin`), which downloads, checks and runs the program, and the signed list of builds it checks it against. |
 | `scripts/` | The login, logout and login-check commands the skills run. |
 
 ## Data handling
@@ -138,6 +212,8 @@ What the plugin writes on your machine:
 - `~/.paradigm-networks/claude-code/`: debug logs, an audit log, session
   metadata and caches, readable only by you. Each log is capped at about
   1 MB, plus one older copy (`<log>.1`).
+- `~/.paradigm-networks/bin/<version>/`: the plugin's program (see
+  [Its program](#its-program)).
 
 Retention and use of the data on the server side is governed by your
 organization's agreement with Paradigm Networks. See our
@@ -165,7 +241,7 @@ must be set in the environment Claude Code is started from.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PARADIGM_NETWORKS_FAILURE_MODE` | `block` | `allow` lets tool calls through, unchecked, when Paradigm Networks can't be reached or you aren't logged in. |
+| `PARADIGM_NETWORKS_FAILURE_MODE` | `block` | `allow` lets tool calls through, unchecked, when Paradigm Networks can't be reached, you aren't logged in, or the plugin's program can't be checked. |
 | `PARADIGM_NETWORKS_PROMPT_FAILURE_MODE` | `allow` | `block` blocks prompts when Paradigm Networks can't be reached. |
 | `PARADIGM_NETWORKS_TIMEOUT` | `60` | Seconds to wait for Paradigm Networks on each check. |
 | `PN_CREDENTIAL_STORE` | unset | `file` keeps your login in `~/.pn/claude-code-credentials.json` instead of the OS credential store. |
@@ -181,10 +257,27 @@ must be set in the environment Claude Code is started from.
   `pn-config.log` (login and token refresh) or `background-login.log`. They
   don't contain your prompts, but they can contain the agent's commands and
   file paths, so check them before sharing.
+- If the agent says **"Paradigm Networks couldn't check its program on this
+  machine"**, the plugin couldn't download its program, or found it changed,
+  so it blocks tool calls rather than run it unchecked. The message says
+  which. If it couldn't be downloaded, check this machine can reach
+  github.com (see [Its program](#its-program)). If it keeps happening, an
+  antivirus or endpoint tool may be removing or changing the program in
+  `~/.paradigm-networks/bin` (`%LOCALAPPDATA%\ParadigmNetworks\bin` on
+  Windows): ask your administrator to allow it.
 - If the browser sign-in finishes but Claude says the login failed with
   `could not reach` or `unexpected non-JSON response`, Claude Code's sandbox
   blocked the login's network access. Run the login command Claude shows in
   your own terminal.
+
+## Uninstall
+
+1. Ask the agent to log out first (the **paradigmnetworks-logout** skill): it revokes the login on
+   the server and removes it from this machine.
+2. Remove the plugin: `/plugin uninstall paradigm-networks@paradigm-networks-plugins`, and remove
+   the marketplace in `/plugin` (**Marketplaces** tab) if you no longer need it.
+3. Optionally delete the local logs:
+   `~/.paradigm-networks/claude-code` (`%USERPROFILE%\.paradigm-networks\claude-code` on Windows).
 
 ## Limitations
 
