@@ -2,10 +2,11 @@ name: verify-builds
 
 # This repository is published by release/release.sh in Paradigm Networks'
 # source repository; BUILD records which commit each release came from.
-# This checks that the pn-plugin binaries are exactly the ones listed in
-# SHA256SUMS; that each plugin's bin/SHA256SUMS, the list the release key
-# signs, names its six builds and every other file the plugin ships, with
-# nothing missing or extra, and all match; that every release key the
+# The plugins ship no builds: each plugin's launcher downloads the build for
+# its machine from the GitHub Release of its version. This checks that each
+# plugin's runtime/SHA256SUMS, the list the release key signs, names the six
+# builds and every other file the plugin ships, with nothing missing or extra,
+# and all match; that every release key the
 # launchers carry is pinned below and each list is signed with one; that the
 # pinned files (LAUNCHER_CODE below: both launchers, verify.ps1, run-hook.cmd,
 # both hooks.json, the login/logout/check-configured scripts, every skill's
@@ -15,10 +16,13 @@ name: verify-builds
 # below, apart from their keys and require-signature switch, and that nothing
 # else in the plugins can load or run (no .mcp.json, .lsp.json,
 # settings.json, commands, agents, new skills or rules, extra hooks or
-# scripts); that the launchers, which require that signature, accept the
-# release (also under Windows PowerShell 5.1); and that a promotion to
-# staging or main carries exactly the files of the tagged release QA tested,
-# never an older version.
+# scripts); that the launchers require that signature; and that a promotion
+# to staging or main carries exactly the files of the tagged release QA
+# tested, never an older version. Once the release is published (a
+# pre-release from develop, then on main before it's made the latest), the
+# launchers job installs nothing but runs the launchers as users do, on Linux
+# and on Windows (Windows PowerShell 5.1 and Git Bash): they download the
+# build from the release, check the signature and the build, and run it.
 #
 # Then, on a push, it finishes the release: on develop it checks the draft
 # GitHub Release stage 1 made, tags the merge commit v<version> and publishes
@@ -65,21 +69,24 @@ env:
   # released tree with .github/scripts/check-code.sh --print .):
   #   release/public/.github/scripts/check-code.sh --print .
   LAUNCHER_CODE: >-
-    claude/bin/pn-plugin=6768edef21986dff4af71b0c04970681296bac7a9506d77ce69203a80918ac4f
-    cursor/bin/pn-plugin=dde70d5072d05f87384a5322ae5f58940b1cf355f326a3b412da470718c6e323
-    cursor/bin/verify.ps1=c0c64b8127dce489c463a146af3c709bad9c69dede0985a7459ee78e3050f54e
-    cursor/scripts/run-hook.cmd=9051db2704d6b64b98a9a0b0e9c97042e6e4b4953f875e3f79663a84b02b21d2
-    claude/hooks/hooks.json=fc4d410f9af152ed2ed07e542c3362ed9cd8796dfabd978064eb2821e9b58a65
-    claude/scripts/check-configured.sh=175f2ae3106abdf18d7f38d41e4cd0c8eb497a0c303debb245b28cbaabdce63e
-    claude/scripts/login.sh=10ea4a08a8bc30ddb76a0ff01cb5a121f01479722101cf53167493cc96697b82
-    claude/scripts/logout.sh=f0c166697cc3a5167d0077e5034354a74447955352fc86bb3936d31e421689f7
+    claude/runtime/pn-plugin=ec614440eace0ccc4a95398ce3f46cb6282b7393cc15f4e97fc9c14c00f9d17c
+    cursor/runtime/pn-plugin=bd4df2aaf4c659937a28c0edd580537f1c37682a544fe9bcbdec12fe0621fddb
+    cursor/runtime/verify.ps1=a6b9ffea5eed044f36e9047e139e99484df81aaf164537bac3852075326351e9
+    cursor/scripts/run-hook.cmd=c4749a2e8713266602586861df0bffa8503b1ac276736168e3e02998f60d08f1
+    .gitattributes=9565ac2ed6b889bb3634706874f63cdc66ac410d94f82eb6117cc73d4470a71d
+    claude/.gitattributes=9708ad2302511a06e86dc4cfdfacbeaef8eaa2fb15e7dce00ea7323c8ce21703
+    cursor/.gitattributes=8e450fc71f52d4f126ca47230fc8ecf199a9dcbe0fb7a1e87788153dbd0dceec
+    claude/hooks/hooks.json=4faefaf0ea29a097256e92f78acd36e4af46a7da5ed7d2a3e709236b29472fce
+    claude/scripts/check-configured.sh=25be0993e6e6393619cd3ea7bfb8efc2c8e02c90e79a812b1dfda2c58d9e37d1
+    claude/scripts/login.sh=e62fe185ffe78dbd3fed4abbfea53adc7f31f0f4b93f3dd6e9cf0276e01f1f40
+    claude/scripts/logout.sh=0227e9773a71089ee8f95dab026327ca980ff2b7780cdfbb5b5d10574294fe6f
     cursor/hooks/hooks.json=32448bcb1437895fe965dd4639a3e3f6ad637e918452c0bb9b517c06a38c018b
-    cursor/scripts/check-configured.ps1=5a15441ec9d2484d145d2a27543df3f232e06fcc353495c424a8cb8fbd1a26e2
-    cursor/scripts/check-configured.sh=ee50a9d5dc38e14c8ae41af3fec8a6f0e0c1e0420f490af9b9ccb53feba7c940
-    cursor/scripts/login.ps1=812f00040d91340e71747cec50369a773593006b41e19020b77e3cda691e3923
-    cursor/scripts/login.sh=ae2db8700738674573f377d844f1cb090e96be31aea57ec4e44772f4f905f608
-    cursor/scripts/logout.ps1=3951d5bb0be5c27ad0c4ec652c72a60340fe06a8f829048df6b63152e5d9ad70
-    cursor/scripts/logout.sh=574bff1d5168d5645aaf847f1070f07d6a8bab9d13547203ccf3e12729f9c2a9
+    cursor/scripts/check-configured.ps1=7e54e6d50b21a00e5f3f3a8ca079da42954c3c182e5ee2a7d55354a1daab86f0
+    cursor/scripts/check-configured.sh=1c91315116249d0bb86c3f49ff94315edf3aaf77ab958d14450ef2737303d435
+    cursor/scripts/login.ps1=01c023117fcbca2bb5ef19b1764651f242b69a2f63316d41e8f17e1726dfe5ed
+    cursor/scripts/login.sh=a11233e32ce6839871e5e2d0e2b1eb5a7e7ebfe3026f9cfc6b5a63e1746ed6b3
+    cursor/scripts/logout.ps1=c5abec4776b1d27f003c7064d6392c9782199fbdfcd06ef034e1e65a8de03145
+    cursor/scripts/logout.sh=b2efaa7b7f917314ce396501703d14fc8bbaccdaa1b8acf1820eb56ebc39ee2e
     claude/skills/paradigmnetworks-login/SKILL.md=375061750fc1043894eb17291ec8ec120fe5c2c8a514edcd33fca2ced1290df0
     claude/skills/paradigmnetworks-logout/SKILL.md=fb9a649a11e78f6b53c0ee16bb1826fe660fb46e4dfdb9f33df129662e6674c0
     cursor/skills/paradigmnetworks-login/SKILL.md=17c8e4340a5aec877a27c4318385e7acf6ed0d3803a599497e8fea77d6b38639
@@ -89,9 +96,6 @@ env:
     cursor/.cursor-plugin/plugin.json=4ddc85cc1daf38d7d896d7e37c852dcd3cb95b0f56fc28734830ff19265bde7e
     .claude-plugin/marketplace.json=0e5d4e08513f1a25605f2afa1ca3fc3a86df9fc95756828000b0f5684eb978ea
     .cursor-plugin/marketplace.json=65fe416a87e6c4910dba1a8fd67e92f34cf04767c02c1eba58c30beca62979ea
-    .gitattributes=b8fad6b41bd17b88c6a4c4dcbe289fb4e02ae2575fcf1a39bce2befae3aee8f5
-    claude/.gitattributes=04f6d91ebefe4619606597f3b1786dcc7d2575826cd56704a4ea20257df78b5c
-    cursor/.gitattributes=1b26297f46baae5432ed0ae48737362026b2d7857ab71be4f06759b3b3d6dd41
 
 jobs:
   verify:
@@ -122,23 +126,11 @@ jobs:
           done
           chmod +x "$checks"/*
           echo "CHECKS=$checks" >>"$GITHUB_ENV"
-      # TODO(PN-15553): once the builds leave the tree, they live only on the
-      # GitHub Release. Then this step, check-lists.sh's build check and the
-      # launcher run below must check the release's files instead (stage 2's
-      # check-release.sh), and the windows job must download them.
-      - name: Binaries match SHA256SUMS
-        run: |
-          sha256sum --check --strict SHA256SUMS
-          listed="$(awk '{print $2}' SHA256SUMS | sed 's/^\*//' | sort)"
-          present="$(ls claude/bin/pn-plugin-* cursor/bin/pn-plugin-* | sort)"
-          if [ "$listed" != "$present" ]; then
-            echo "::error::The binaries in claude/bin and cursor/bin don't match the list in SHA256SUMS."
-            diff <(echo "$listed") <(echo "$present") || true
-            exit 1
-          fi
-      # Each plugin's bin/SHA256SUMS is the list the release key signs: its six
-      # builds, which the launcher checks before every run, and every other
-      # file the plugin ships (hooks, scripts, skills, launchers, plugin.json).
+      # Each plugin's runtime/SHA256SUMS is the list the release key signs: the
+      # six builds, which the launcher downloads and checks before every run,
+      # and every other file the plugin ships (hooks, scripts, skills,
+      # launchers, plugin.json). The builds themselves are on the GitHub
+      # Release: stage 2 and stage 3 check them there (check-release.sh).
       - name: Each plugin's list names every file it ships, and all match
         run: |
           version="$(sed -n 's/^version: *//p' BUILD)"
@@ -156,45 +148,79 @@ jobs:
       # pinned code (LAUNCHER_CODE).
       - name: The launchers are the pinned code
         run: '"$CHECKS/check-code.sh" .'
-      # The launchers carry the release public key and require a signature; run
-      # them as users do. "pn-plugin version" checks the signature and the
-      # build before printing the version.
-      - name: Releases are signed, and the launchers accept them
+      # The launchers carry the release public key and require a signature.
+      # They're run as users run them, downloading the builds, once the
+      # release is published (the launchers job).
+      - name: Releases are signed, and the launchers require it
         run: |
-          version="$(sed -n 's/^version: *//p' BUILD)"
           "$CHECKS/check-signatures.sh" .
-          for setting in "claude/bin/pn-plugin:require_signature=1" "cursor/bin/pn-plugin:require_signature=1" \
-            'cursor/bin/verify.ps1:$RequireSignature = $true' 'cursor/scripts/run-hook.cmd:set "PN_REQUIRE_SIGNATURE=1"'; do
+          for setting in "claude/runtime/pn-plugin:require_signature=1" "cursor/runtime/pn-plugin:require_signature=1" \
+            'cursor/runtime/verify.ps1:$RequireSignature = $true' 'cursor/scripts/run-hook.cmd:set "PN_REQUIRE_SIGNATURE=1"'; do
             file="${setting%%:*}"
             if ! grep -qxF -- "${setting#*:}" "$file"; then
               echo "::error::$file doesn't require a signature (${setting#*:})."
               exit 1
             fi
           done
-          for plugin in claude cursor; do
-            got="$("$plugin/bin/pn-plugin" version)" || got=
-            if [ "$got" != "$version" ]; then
-              echo "::error::$plugin/bin/pn-plugin refuses this release: its list of builds isn't signed with the release key, or a build doesn't match."
-              exit 1
-            fi
-          done
-          echo "Both plugins' lists are signed with the release key."
+          echo "Both plugins' lists are signed with the release key, and every launcher requires it."
 
-  windows:
-    # Cursor on Windows checks the signature with Windows PowerShell 5.1
-    # (cursor/bin/verify.ps1, the P1363 copy), not openssl.
-    runs-on: windows-latest
+  launchers:
+    # The published release, as users get it: on a push to develop after stage
+    # 2 has published the pre-release, and on a push to main before stage 3
+    # makes it the latest release. Nothing is installed or downloaded by hand:
+    # the launchers download the build for this runner from github.com, check
+    # the list's signature (openssl; Windows PowerShell 5.1 and the P1363 copy
+    # for Cursor on Windows) and the build's hash, and run it. A fresh cache
+    # each time, so every run downloads.
+    needs: [verify, tag]
+    if: always() && github.event_name == 'push' && needs.verify.result == 'success' && (needs.tag.result == 'success' || needs.tag.result == 'skipped')
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-      - name: verify.ps1 accepts the release
+      # macOS and Linux, and Claude Code on Windows (Git Bash).
+      - name: The sh launchers download, check and run the build
+        shell: bash
+        run: |
+          version="$(sed -n 's/^version: *//p' BUILD)"
+          if [ "$RUNNER_OS" = Windows ]; then
+            rm -rf "$LOCALAPPDATA/ParadigmNetworks"
+          else
+            rm -rf "$HOME/.paradigm-networks"
+          fi
+          for plugin in claude cursor; do
+            got="$("$plugin/runtime/pn-plugin" version)" || got=
+            if [ "$got" != "$version" ]; then
+              echo "::error::$plugin/runtime/pn-plugin printed \"$got\", want $version: it didn't download, check or run the release's build (above)."
+              exit 1
+            fi
+          done
+          echo "Both sh launchers downloaded, checked and ran v$version."
+      # Cursor on Windows: verify.ps1 under Windows PowerShell 5.1 downloads
+      # and checks both Windows builds; run-hook.cmd and check-configured.ps1
+      # run the one for this runner.
+      - name: Cursor's Windows launchers download, check and run the build
+        if: runner.os == 'Windows'
         shell: cmd
         run: |
-          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\bin\verify.ps1 -Arch amd64 || exit /b 1
-          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\bin\verify.ps1 -Arch arm64 || exit /b 1
+          if exist "%LOCALAPPDATA%\ParadigmNetworks" rd /s /q "%LOCALAPPDATA%\ParadigmNetworks"
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\runtime\verify.ps1 -Arch amd64 || exit /b 1
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\runtime\verify.ps1 -Arch arm64 || exit /b 1
+          echo {} | cmd /c cursor\scripts\run-hook.cmd check-session-end > "%RUNNER_TEMP%\hook.out" || exit /b 1
+          type "%RUNNER_TEMP%\hook.out"
+          findstr /C:"couldn't check its program" "%RUNNER_TEMP%\hook.out" >nul && exit /b 1
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File cursor\scripts\check-configured.ps1 > "%RUNNER_TEMP%\configured.out"
+          type "%RUNNER_TEMP%\configured.out"
+          findstr /R /C:"CONFIGURED" "%RUNNER_TEMP%\configured.out" >nul || exit /b 1
+          echo Cursor's Windows launchers downloaded, checked and ran the build.
 
   promotion:
     # A PR into staging or main must bring exactly the plugin files of the
@@ -255,7 +281,7 @@ jobs:
     # key or a check of its own. A push that isn't a new release (its version
     # is tagged on another commit) does nothing; a re-run on the tagged commit
     # finishes publishing a pre-release that's still a draft.
-    needs: [verify, windows]
+    needs: [verify]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -407,7 +433,7 @@ jobs:
     # release, marked latest, with notes from CHANGELOG.md. It attaches
     # nothing: an immutable release can't take new files. A version already
     # promoted is left alone. Uses this job's own token: it creates no tag.
-    needs: [verify, windows]
+    needs: [verify, launchers]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
