@@ -4,6 +4,6 @@
 # Usage: check-configured.sh
 #
 # The login and logout skills, and the plugin's own messages to the agent,
-# run this script by this path; the work is done by pn-plugin (bin/).
+# run this script by this path; the work is done by pn-plugin (runtime/).
 
-exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/pn-plugin" check-configured "$@"
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/runtime/pn-plugin" check-configured "$@"

@@ -1,0 +1,471 @@
+#!/bin/sh
+# Bash run as sh (macOS, Git Bash, some Linux) imports shell functions from
+# the environment, even ones named "[" or "uname", and reads BASH_ENV; started
+# with -p (privileged) it does neither, so under bash this starts again in the
+# same bash ($BASH, which bash itself sets) with -p. Only case, exec and
+# assignments run before this, and in sh mode no function can replace them.
+#   - Bash is told apart by BASH_VERSION and the B (brace expansion) it
+#     always has in $-; nothing in the environment gives dash or ash a B, so
+#     one that was merely handed BASH_VERSION isn't restarted (and macOS's
+#     dash would reject -p).
+#   - $- having p isn't enough to stop: SHELLOPTS=privileged in the
+#     environment sets it after the functions are imported. So the restart
+#     passes its own PID (exec keeps it), and stops only when that matches.
+case ${BASH_VERSION-}:$- in
+  ?*:*B*) case ${BASH-}:${PN_LAUNCHER_PID-} in
+    ?*:"$$") ;;
+    ?*:*) PN_LAUNCHER_PID=$$ exec "$BASH" -p "$0" "$@" ;;
+  esac ;;
+esac
+
+# Runs the pn-plugin build for this machine, telling it where the plugin is
+# installed. Every hook and script goes through here, except Cursor's on
+# Windows: scripts/run-hook.cmd and the .ps1 scripts check and run the .exe
+# themselves. Both plugins' copies of this file differ only in host and
+# manifest.
+#
+# The plugin root is worked out with cd + pwd, the logical path the agent
+# sees, so the scripts directory pn-plugin reports matches the one the agent
+# is told to run login.sh from. On Windows, Claude Code runs this in Git
+# Bash, whose pwd gives /c/Users/...; pwd -W gives C:/Users/..., which the
+# Windows program can open and Git Bash still accepts.
+#
+# The plugin ships no builds (release/README.md, "Requirements for
+# PN-15553"). Before every run, this checks the build
+# (release/launcher-verification/README.md):
+#   - runtime/SHA256SUMS, shipped with the plugin, lists every build as
+#     pn-plugin-<version>-<os>-<arch>. The build must match the line for this
+#     plugin's version (plugin.json), so an older build can't stand in for it.
+#   - runtime/SHA256SUMS.sig is the release signature over SHA256SUMS. When
+#     require_signature is 1 it must be there and verify with one of the
+#     public keys below (needs openssl). Before that, it's checked when it's
+#     there and openssl is installed.
+#   - The build itself is kept in a cache folder of the user's own,
+#     ~/.paradigm-networks/bin/<version>/ (%LOCALAPPDATA%\ParadigmNetworks\
+#     bin\<version>\ on Windows). When it isn't there, it's downloaded from
+#     the GitHub Release of this version (release_url, fixed below) with curl
+#     and kept only if it matches its line. An administrator can put it there
+#     beforehand for a machine that can't reach GitHub.
+#   - Every run copies the cached build to a file of its own in the cache
+#     folder, checks the copy's SHA-256 and runs the copy, so the cache can't
+#     change between the check and the run.
+# The checks use the system's own tools (trusted_path), not whatever comes
+# first on PATH, with nothing in the environment that changes how they
+# behave. Nothing is written to the plugin folder, so read-only installs work.
+#
+# If a check fails, hooks fail closed: tool calls are denied (unless
+# PARADIGM_NETWORKS_FAILURE_MODE=allow) and prompts follow
+# PARADIGM_NETWORKS_PROMPT_FAILURE_MODE, like any other failure.
+
+# 1 once releases are signed by the release workflow.
+require_signature=1
+host=claude
+manifest=.claude-plugin/plugin.json
+
+# Where the builds are downloaded from: <release_url>/v<version>/<build>,
+# which GitHub redirects to its release file host, one of asset_hosts (https,
+# no port, no other host). Fixed: nothing the user, a project or the agent
+# sets can change them. The launcher tests replace these two lines.
+release_url=https://github.com/ParadigmNetworks-ai/paradigm-networks-plugins/releases/download
+asset_hosts='release-assets.githubusercontent.com objects.githubusercontent.com'
+# The largest build that's accepted, in bytes (the builds are about 8 MB).
+max_size=67108864
+
+# Release signing public keys (P-256): the current key and, during a key
+# change, the next one. Keep in step with the other plugin's runtime/pn-plugin
+# and cursor/runtime/verify.ps1; the launcher tests check they match.
+# BEGIN pn-release-signing keys
+release_key_1='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEBO+i5b7beDKB6Uj8nrajxEvBKjGh
+DuQGwprRi9IWJc54jEkxsRIzP5kLQO9YX6jpWNvPQhKoDVOa3vYgSuqlHg==
+-----END PUBLIC KEY-----'
+release_key_2=''
+# END pn-release-signing keys
+
+# The checks' tools come only from here (Git for Windows keeps them in
+# /usr/bin, NixOS in /run/current-system/sw/bin; the launcher tests check
+# this list and replace this line). pn-plugin gets the caller's PATH back. The unset variables can make
+# openssl, or any program, load other code.
+caller_path=$PATH
+trusted_path=/usr/bin:/bin:/usr/sbin:/sbin:/run/current-system/sw/bin
+PATH=$trusted_path
+export PATH
+unset OPENSSL_CONF OPENSSL_MODULES OPENSSL_ENGINES LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT \
+  DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH CDPATH IFS PN_LAUNCHER_PID 2>/dev/null
+
+# No dirname: the root is needed even when the tools aren't there.
+case $0 in */*) here="${0%/*}" ;; *) here=. ;; esac
+root="$(cd "$here/.." && pwd)"
+rt="$root/runtime"
+cmd="${1-}"
+hook="${2-}"
+
+# SessionStart context always ends with the scripts directory: the login and
+# logout skills read it from there. Left out only if the path would need JSON
+# escaping, which these fixed-text replies don't do.
+scripts_line=
+case $root in
+  *[\"\\]*|*[[:cntrl:]]*) ;;
+  *) scripts_line="\\n\\nParadigm Networks plugin scripts directory: $root/scripts" ;;
+esac
+
+# One hook reply, in this agent's format (pn-plugin's internal/host).
+say() {
+  case "$host:$1" in
+    claude:allow-tool|claude:allow-prompt)
+      printf '{"systemMessage": "%s"}\n' "$2" ;;
+    claude:notice)
+      printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "%s%s"}}\n' "$2" "$2" "$scripts_line" ;;
+    claude:deny-tool)
+      printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "%s"}}\n' "$2" "$3" ;;
+    claude:deny-prompt)
+      printf '{"decision": "block", "reason": "%s"}\n' "$2" ;;
+    cursor:allow-tool)
+      printf '{"permission": "allow", "user_message": "%s"}\n' "$2" ;;
+    cursor:deny-tool)
+      printf '{"permission": "deny", "user_message": "%s", "agent_message": "%s"}\n' "$2" "$3" ;;
+    cursor:allow-prompt)
+      printf '{"continue": true, "user_message": "%s"}\n' "$2" ;;
+    cursor:deny-prompt)
+      printf '{"continue": false, "user_message": "%s"}\n' "$2" ;;
+    cursor:notice)
+      # Cursor's session start takes only context; like pn-plugin's on macOS
+      # and Linux, it ends with a newline.
+      printf '{"additional_context": "%s%s\\n"}\n' "$2" "$scripts_line" ;;
+    *)
+      echo '{}' ;;
+  esac
+}
+
+# What this run leaves behind and removes on its way out: the signature
+# check's folder, a download's lock and partial file, and the copy it runs.
+tmp=
+lock=
+part=
+run=
+cleanup() {
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  [ -n "$part" ] && rm -f "$part"
+  [ -n "$lock" ] && rmdir "$lock" 2>/dev/null
+  [ -n "$run" ] && rm -f "$run"
+  tmp= part= lock= run=
+}
+trap cleanup EXIT
+trap 'cleanup; exit 129' HUP
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
+
+reinstall="Reinstall the Paradigm Networks plugin, or ask your administrator."
+install_openssl="Install openssl (for example apt-get install openssl, apk add openssl or microdnf install openssl), then start a new session."
+no_download="Check that this machine can reach github.com, then try again, or ask your administrator."
+
+# A check failed: say what ($1) and how to fix it ($2), and fail closed.
+# Messages are fixed text (no paths), so they need no JSON escaping.
+refuse() {
+  cleanup
+  what="$1"
+  fix="$2"
+  if [ "$cmd" != hook ]; then
+    echo "error: $what. $fix" >&2
+    exit 1
+  fi
+  cat >/dev/null 2>&1
+  case "$(printf '%s' "${PARADIGM_NETWORKS_FAILURE_MODE:-}" | tr '[:upper:]' '[:lower:]')" in
+    allow|open) tools=allow ;;
+    *) tools=deny ;;
+  esac
+  case "$(printf '%s' "${PARADIGM_NETWORKS_PROMPT_FAILURE_MODE:-}" | tr '[:upper:]' '[:lower:]')" in
+    block|closed) prompts=deny ;;
+    *) prompts=allow ;;
+  esac
+  blocked="$what. Tool calls are blocked until this is fixed."
+  unchecked="$what, so tool calls are NOT checked against your organization's policy."
+  case "$hook:$tools" in
+    check-tool-call:deny|tool-call:deny)
+      say deny-tool "$blocked $fix" "$blocked Tell the user: $fix" ;;
+    check-tool-call:allow|tool-call:allow)
+      say allow-tool "$what. This tool call was allowed without a policy check." ;;
+    check-prompt:*|prompt:*)
+      if [ "$prompts" = deny ]; then
+        say deny-prompt "$what. $fix"
+      else
+        say allow-prompt "$what, so this prompt was not checked. $fix"
+      fi ;;
+    check-session:deny|session-start:deny) say notice "$blocked $fix" ;;
+    check-session:allow|session-start:allow) say notice "$unchecked $fix" ;;
+    *) echo '{}' ;;
+  esac
+  exit 0
+}
+
+# The usual case: the program, or its list, isn't right.
+fail() { refuse "Paradigm Networks couldn't check its program on this machine: $1" "${2:-$reinstall}"; }
+
+# The system tools the checks need ($@), each from trusted_path. Any that are
+# missing are named, rather than the check failing later for a reason that
+# isn't the real one (no uname reads as an unknown machine).
+need() {
+  missing=
+  for tool in "$@"; do
+    command -v "$tool" >/dev/null 2>&1 || missing="${missing:+$missing, }$tool"
+  done
+  [ -z "$missing" ] ||
+    refuse "Paradigm Networks couldn't check its program on this machine: a system tool it needs isn't installed: $missing" "Install $missing, or ask your administrator."
+}
+need uname sed awk head cut tr cat
+
+case "$(uname -s 2>/dev/null)" in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  MINGW*|MSYS*|CYGWIN*) os=windows ;;
+  *) os=unknown ;;
+esac
+case "$(uname -m 2>/dev/null)" in
+  x86_64|amd64) arch=amd64 ;;
+  arm64|aarch64) arch=arm64 ;;
+  *) arch=unknown ;;
+esac
+if [ "$os" = unknown ] || [ "$arch" = unknown ]; then
+  # No build for this machine (an unexpected OS or CPU): fail closed too, so
+  # nothing can switch the checks off by looking like another machine.
+  machine="$(uname -s -m 2>/dev/null | tr -cd 'A-Za-z0-9 ._-')"
+  refuse "Paradigm Networks has no build for this machine, $machine" "Use Paradigm Networks on macOS, Linux or Windows on an Intel or ARM processor, or ask your administrator."
+fi
+need id find mkdir cp chmod rm rmdir
+[ "$os" = windows ] && need cygpath
+
+ext=
+[ "$os" = windows ] && ext=.exe
+sums="$rt/SHA256SUMS"
+
+sha256() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 -r "$1" 2>/dev/null | cut -c1-64
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" 2>/dev/null | cut -c1-64
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" 2>/dev/null | cut -c1-64
+  fi
+}
+
+# The top-level "version" (two-space indent, as written by hand and by tools).
+# It names the cache folder and the download, so it must be a plain X.Y.Z.
+version="$(sed -n 's/^  "version": *"\([^"]*\)".*/\1/p' "$root/$manifest" 2>/dev/null | head -1)"
+[ -n "$version" ] || fail "the plugin's version is missing"
+printf '%s\n' "$version" | awk '!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$/ { bad = 1 } END { exit bad }' ||
+  fail "the plugin's version isn't a release version"
+[ -f "$sums" ] || fail "the plugin's list of builds is missing"
+list="$sums"
+
+check_signature=0
+if [ "$require_signature" = 1 ]; then
+  [ -f "$sums.sig" ] || fail "the plugin's release signature is missing"
+  command -v openssl >/dev/null 2>&1 ||
+    fail "openssl isn't installed, and it's needed to check the release signature" "$install_openssl"
+  check_signature=1
+elif [ -f "$sums.sig" ] && command -v openssl >/dev/null 2>&1; then
+  # Not required yet: checked when it can be. Without openssl, the hash check
+  # below still runs.
+  check_signature=1
+fi
+
+if [ "$check_signature" = 1 ]; then
+  need mktemp
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/pn-plugin.XXXXXX")" || fail "no temporary folder for the signature check"
+  # Verify and read one copy, so the list can't change between the two.
+  cp "$sums" "$tmp/SHA256SUMS" || fail "the plugin's list of builds can't be read"
+  list="$tmp/SHA256SUMS"
+  signed=0
+  for key in "$release_key_1" "$release_key_2"; do
+    [ -n "$key" ] || continue
+    printf '%s\n' "$key" >"$tmp/key.pem"
+    if openssl dgst -sha256 -verify "$tmp/key.pem" -signature "$sums.sig" "$list" >/dev/null 2>&1; then
+      signed=1
+      break
+    fi
+  done
+  [ "$signed" = 1 ] || fail "the release signature doesn't match"
+fi
+
+name="pn-plugin-$version-$os-$arch$ext"
+want="$(awk -v n="$name" '{ sub(/\r$/, "") } $2 == n || $2 == "*" n { print $1; exit }' "$list")"
+cleanup
+case $want in
+  *[!0-9a-f]*) want= ;;
+esac
+[ ${#want} -eq 64 ] || fail "the plugin's list of builds has no build for this version and machine"
+[ -n "$(sha256 "$sums")" ] || fail "no SHA-256 tool is installed (openssl, sha256sum or shasum)" "$install_openssl"
+
+# ─── the cache ────────────────────────────────────────────────────────────────
+base=
+if [ "$os" = windows ]; then
+  if [ -n "${LOCALAPPDATA:-}" ]; then
+    d="$(cygpath -u "$LOCALAPPDATA" 2>/dev/null)"
+    [ -n "$d" ] && base="$d/ParadigmNetworks"
+  fi
+else
+  [ -n "${HOME:-}" ] && base="$HOME/.paradigm-networks"
+fi
+case $base in
+  /*) ;;
+  *) fail "there's no home folder to keep its program in" "Start the agent with HOME (LOCALAPPDATA on Windows) set, or ask your administrator." ;;
+esac
+cache="$base/bin/$version"
+uid="$(id -u 2>/dev/null)"
+unsafe="its folder for the program, ~/.paradigm-networks, is a link, isn't yours or can be changed by other users"
+unsafe_fix="Remove the folder (it's downloaded again), or ask your administrator."
+
+# own_dir <folder>: makes it (only the user can use it) when it isn't there,
+# and checks it's a real folder, not a link, owned by the user and not
+# writable by anyone else. Git for Windows has no real owners or modes: there
+# the folder is under LOCALAPPDATA, which only the user can use.
+own_dir() {
+  if [ ! -e "$1" ] && [ ! -L "$1" ]; then
+    mkdir -m 700 "$1" 2>/dev/null || [ -d "$1" ] ||
+      fail "its folder for the program can't be made" "$unsafe_fix"
+  fi
+  [ -d "$1" ] && [ ! -L "$1" ] || fail "$unsafe" "$unsafe_fix"
+  [ "$os" = windows ] && return 0
+  [ -n "$uid" ] && [ -n "$(find "$1" -prune -user "$uid" ! -perm -020 ! -perm -002 -print 2>/dev/null)" ] ||
+    fail "$unsafe" "$unsafe_fix"
+}
+own_dir "$base"
+own_dir "$base/bin"
+own_dir "$cache"
+
+# older <X.Y.Z>: whether it's older than this plugin's version.
+older() {
+  awk -v a="$1" -v b="$version" 'BEGIN {
+    if (a !~ /^[0-9]+\.[0-9]+\.[0-9]+$/) exit 1
+    split(a, x, "."); split(b, y, ".")
+    for (i = 1; i <= 3; i++) { if (x[i] + 0 < y[i] + 0) exit 0; if (x[i] + 0 > y[i] + 0) exit 1 }
+    exit 1 }'
+}
+
+# Removes what earlier runs left behind, on every run (this launcher's, and on
+# Windows verify.ps1's and run-hook.cmd's, which share the folder): partial
+# downloads and run copies an hour old. A run's copy is removed when it ends,
+# except when it's killed, or on Windows while pn-plugin's background runs
+# (the login waiting for the browser) still use it: Windows can't remove a
+# program that's running, so the removal fails and a later run tries again.
+tidy() {
+  find "$cache" -mindepth 1 -maxdepth 1 \( -name '.download.*' -o -name '.run.*' -o -name 'download-*' -o -name 'run-*' \) -mmin +60 -exec rm -rf {} + 2>/dev/null
+  return 0
+}
+
+# Removes older versions' builds once nothing has run them for 30 days, under
+# the download lock. Another plugin or an open session may still be on an
+# older version (and a machine without network may only have what was put in
+# its cache): every run copies its build into its version's folder, which
+# changes the folder's time, so a version in use is never removed. A newer
+# version's folder is always kept.
+prune() {
+  for d in "$base/bin"/*; do
+    [ "$d" = "$cache" ] && continue
+    if [ -L "$d" ]; then
+      rm -f "$d"
+    elif [ -d "$d" ] && older "${d##*/}" && [ -n "$(find "$d" -prune -mtime +30 2>/dev/null)" ]; then
+      rm -rf "$d" 2>/dev/null
+    fi
+  done
+  return 0
+}
+
+# Downloads this machine's build into the cache, once: one run downloads at a
+# time (the lock), and the others wait for it.
+download() {
+  # Git for Windows has its own curl; Windows' is in System32.
+  curl=curl
+  if [ "$os" = windows ]; then
+    curl=/c/Windows/System32/curl.exe
+    [ -f "$curl" ] || refuse "Paradigm Networks couldn't check its program on this machine: Windows' curl.exe isn't installed, and it's needed to download its program" "Update Windows, or ask your administrator."
+    need mv wc sleep
+  else
+    need curl mv wc sleep
+  fi
+  waited=0
+  until mkdir "$cache/.lock" 2>/dev/null; do
+    [ -f "$cache/$name" ] && return 0
+    # A lock left by a run that was killed: no download holds it this long.
+    if [ -n "$(find "$cache/.lock" -prune -mmin +4 2>/dev/null)" ]; then
+      rmdir "$cache/.lock" 2>/dev/null
+      continue
+    fi
+    # As long as a download may take (30s + 180s, below), within the 250s
+    # the agents give the hooks that block.
+    [ "$waited" -lt 215 ] || fail "another download of its program hasn't finished" "Try again in a minute, or ask your administrator."
+    sleep 1
+    waited=$((waited + 1))
+  done
+  lock="$cache/.lock"
+  if [ -f "$cache/$name" ]; then
+    rmdir "$lock" 2>/dev/null
+    lock=
+    return 0
+  fi
+
+  # -q: no .curlrc. HTTPS_PROXY and the like still apply.
+  set -- -q -sS --proto =https --tlsv1.2 --connect-timeout 15 --max-redirs 0
+  # Windows' curl checks revocation where it can, as verify.ps1 does: a proxy
+  # that inspects TLS often has no revocation list, and the signed list
+  # decides what runs anyway.
+  if [ "$os" = windows ]; then
+    set -- "$@" --ssl-revoke-best-effort
+  fi
+  # GitHub answers with a redirect to its file host, which is checked before
+  # anything is fetched from it.
+  answer="$("$curl" "$@" --max-time 30 -o /dev/null -w '%{http_code} %{redirect_url}' "$release_url/v$version/$name" 2>/dev/null)"
+  code="${answer%% *}"
+  to="${answer#* }"
+  case $code in
+    301|302|303|307|308) ;;
+    404) fail "this version's program isn't on GitHub" "Update the Paradigm Networks plugin, or ask your administrator." ;;
+    000|"") fail "its program couldn't be downloaded" "$no_download" ;;
+    *) fail "its program couldn't be downloaded: GitHub didn't send it" "$no_download" ;;
+  esac
+  ok=0
+  for h in $asset_hosts; do
+    case $to in "https://$h/"*) ok=1 ;; esac
+  done
+  [ "$ok" = 1 ] || fail "its download was sent to an address that isn't GitHub's"
+  part="$cache/.download.$$"
+  # Exit 63: larger than --max-filesize (curl stops as soon as it knows).
+  "$curl" "$@" -f --max-time 180 --max-filesize "$max_size" -o "$part" "$to" 2>/dev/null || {
+    [ "$?" = 63 ] && fail "its download is larger than any build"
+    fail "its program couldn't be downloaded" "$no_download"
+  }
+  size="$(wc -c <"$part" 2>/dev/null | tr -cd 0-9)"
+  [ -n "$size" ] && [ "$size" -le "$max_size" ] || fail "its download is larger than any build"
+  [ "$(sha256 "$part")" = "$want" ] || fail "the downloaded program doesn't match the plugin's list of builds"
+  chmod 500 "$part" && mv -f "$part" "$cache/$name" || fail "its program couldn't be saved" "$unsafe_fix"
+  part=
+  prune
+  rmdir "$lock" 2>/dev/null
+  lock=
+}
+
+tidy
+[ -f "$cache/$name" ] || download
+
+# Run a copy of its own, checked: the cached build could change after any
+# check of it, the copy can't (only this run knows its name).
+run="$cache/.run.$$$ext"
+rm -f "$run"
+cp "$cache/$name" "$run" 2>/dev/null && chmod 500 "$run" || fail "its program can't be copied to run" "$unsafe_fix"
+if [ "$(sha256 "$run")" != "$want" ]; then
+  # Downloaded again next time.
+  rm -f "$cache/$name"
+  fail "the program doesn't match the plugin's list of builds"
+fi
+[ -x "$run" ] || fail "the program can't be started"
+
+if [ "$os" = windows ]; then
+  root="$(cd "$root" && pwd -W 2>/dev/null || pwd)"
+fi
+# Not exec: the copy is removed once it's done. pn-plugin's background runs
+# have started by then, from the copy (macOS and Linux keep a removed
+# program running; Windows doesn't remove one that's running).
+PATH="$caller_path" PN_PLUGIN_ROOT="$root" "$run" "$@" --host "$host"
+rc=$?
+cleanup
+exit "$rc"

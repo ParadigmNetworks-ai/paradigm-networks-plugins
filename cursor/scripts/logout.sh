@@ -4,7 +4,7 @@
 # Usage: logout.sh
 #
 # The login and logout skills, and the plugin's own messages to the agent,
-# run this script by this path; the work is done by pn-plugin (bin/).
+# run this script by this path; the work is done by pn-plugin (runtime/).
 
 # On Windows, the PowerShell script next to this one is the one to run.
 case "$(uname -s 2>/dev/null)" in
@@ -14,4 +14,4 @@ case "$(uname -s 2>/dev/null)" in
     ;;
 esac
 
-exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/bin/pn-plugin" logout "$@"
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/runtime/pn-plugin" logout "$@"
